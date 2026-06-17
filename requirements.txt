@@ -1,0 +1,13 @@
+# API
+fastapi
+uvicorn
+
+# Database
+pymongo
+
+# Utils
+python-dotenv
+
+# Tests
+pytest
+pytest-cov
