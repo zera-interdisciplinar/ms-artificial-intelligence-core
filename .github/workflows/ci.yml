@@ -7,7 +7,6 @@ on:
       - main
 
 permissions:
-  statuses: write
   contents: read
 
 jobs:
@@ -35,17 +34,3 @@ jobs:
         with:
           file: ./coverage.xml
           token: ${{ secrets.CODECOV_TOKEN }}
-
-      - name: Report status check
-        if: always()
-        uses: actions/github-script@v7
-        with:
-          script: |
-            github.rest.repos.createCommitStatus({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              sha: context.sha,
-              state: '${{ job.status }}' === 'success' ? 'success' : 'failure',
-              context: 'ci / Tests and coverage',
-              description: 'Tests and coverage check'
-            })
