@@ -6,11 +6,6 @@ on:
       - qa
       - main
 
-  push:
-    branches:
-      - qa
-      - main
-
 jobs:
   test:
     name: Tests and coverage
