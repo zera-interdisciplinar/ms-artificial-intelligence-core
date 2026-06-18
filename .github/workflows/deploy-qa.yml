@@ -5,35 +5,55 @@ on:
     branches:
       - qa
 
+env:
+  REGISTRY: us-central1-docker.pkg.dev
+  IMAGE: us-central1-docker.pkg.dev/zera1405/repo/ms-artificial-intelligence-core
+
 jobs:
   deploy:
     name: Deploy to QA
     runs-on: ubuntu-latest
     permissions:
-      contents: 'read'
-      id-token: 'write'
+      contents: read
+      id-token: write
 
     steps:
       - uses: actions/checkout@v4
 
-      - id: 'auth'
-        uses: 'google-github-actions/auth@v2'
+      - id: auth
+        uses: google-github-actions/auth@v2
         with:
-          workload_identity_provider: 'projects/537842934721/locations/global/workloadIdentityPools/zera-pool/providers/github-provider'
-          service_account: 'github-actions-deploy@zera1405.iam.gserviceaccount.com'
+          workload_identity_provider: projects/537842934721/locations/global/workloadIdentityPools/zera-pool/providers/github-provider
+          service_account: github-actions-deploy@zera1405.iam.gserviceaccount.com
 
-      - uses: 'google-github-actions/get-gke-credentials@v2'
+      - uses: google-github-actions/get-gke-credentials@v2
         with:
-          cluster_name: 'autopilot-cluster-1'
-          location: 'us-central1'
+          cluster_name: autopilot-cluster-1
+          location: us-central1
+
+      - name: Configure Docker
+        run: gcloud auth configure-docker ${{ env.REGISTRY }} --quiet
 
       - name: Build and Push Docker Image
         run: |
-          gcloud auth configure-docker us-central1-docker.pkg.dev
-          docker build -t us-central1-docker.pkg.dev/zera1405/repo/ms-artificial-intelligence-core:qa .
-          docker push us-central1-docker.pkg.dev/zera1405/repo/ms-artificial-intelligence-core:qa
+          docker build \
+            --tag ${{ env.IMAGE }}:qa \
+            --tag ${{ env.IMAGE }}:qa-${{ github.sha }} \
+            .
+
+          docker push ${{ env.IMAGE }}:qa
+          docker push ${{ env.IMAGE }}:qa-${{ github.sha }}
 
       - name: Deploy to GKE
         run: |
-          sed -i "s|:latest|:qa|g" k8s/deployment.yaml
-          kubectl apply -f k8s/deployment.yaml
+          sed -i "s|IMAGE_TAG|qa-${{ github.sha }}|g" k8s/deployment-qa.yaml
+          kubectl apply -f k8s/deployment-qa.yaml -n qa
+          kubectl apply -f k8s/service-qa.yaml -n qa
+          kubectl rollout status deployment/ms-artificial-intelligence-core -n qa --timeout=120s
+
+      - name: Annotate Deployment
+        run: |
+          kubectl annotate deployment ms-artificial-intelligence-core \
+            -n qa \
+            kubernetes.io/change-cause="QA deploy — commit ${{ github.sha }}" \
+            --overwrite

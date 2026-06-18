@@ -2,10 +2,10 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: ms-artificial-intelligence-core
-  namespace: production
+  namespace: qa
 spec:
   replicas: 1
-  revisionHistoryLimit: 5
+  revisionHistoryLimit: 3
   selector:
     matchLabels:
       app: ms-artificial-intelligence-core
