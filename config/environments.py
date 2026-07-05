@@ -1,0 +1,46 @@
+"""
+Starts the environment variables for the application according to the .env file in the root directory of the project.
+If a variable is not found in the .env file, it will be initialized with the default value defined in this file.
+Uses the class Environments to define the environment variables and their default values.
+
+
+envs:
+# Environment configuration for the ms-artificial-intelligence-core service.
+APP_ENV="DEV"
+
+# APIs
+GEMINI_API_KEY="YOUR_GEMINI_API_KEY"
+
+# Database
+MONGO_URI="mongodb://localhost:27017"
+MONGO_DB_NAME="ms-artificial-intelligence-core"
+MONGO_USERNAME="root"
+MONGO_PASSWORD="root"
+"""
+
+from dotenv import load_dotenv
+from logger.logger import logger
+import os
+
+load_dotenv()
+myLogger = logger()
+myLogger.Info("Loading environment variables from .env file")
+
+class Environments:
+    """Class that defines the environment variables and their default values."""
+    
+    def __init__(self):
+        myLogger.Info("Initializing environment variables with default values")
+        
+        #Environment
+        self.APP_ENV = os.getenv("APP_ENV", "DEV")
+        
+        # APIs
+        self.GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+        
+        # Database
+        self.MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
+        self.MONGO_DB_NAME = os.getenv("MONGO_DB_NAME", "ms-artificial-intelligence-core")
+        self.MONGO_USERNAME = os.getenv("MONGO_USERNAME", "root")
+        self.MONGO_PASSWORD = os.getenv("MONGO_PASSWORD")
+        

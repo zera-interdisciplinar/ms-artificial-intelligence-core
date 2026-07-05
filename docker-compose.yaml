@@ -1,15 +1,4 @@
 services:
-  app:
-    build: .
-    ports:
-      - "8000:8000"
-    environment:
-      - MONGO_URI=mongodb://mongo:27017/zera
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - GEMINI_API_KEY
-    depends_on:
-      - mongo
-
   mongo:
     image: mongo:7
     ports:
