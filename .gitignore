@@ -23,3 +23,6 @@ Thumbs.db
 *.pyc
 *.py[cod]
 *.pyc.*
+
+# ambiente virtual
+zera-ai-core/ 

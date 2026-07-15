@@ -2,6 +2,9 @@
 fastapi
 uvicorn
 
+# Agents
+langgraph
+
 # Database
 pymongo
 

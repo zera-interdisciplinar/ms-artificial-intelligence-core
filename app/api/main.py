@@ -14,4 +14,3 @@ envs = Environments()
 # Open a new connection to the MongoDB database using the environment variables
 repository = Repository(envs)
 
-# 
