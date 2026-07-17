@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
+from typing import Any, cast
 
 import pytest
 from pydantic import ValidationError
@@ -29,12 +30,14 @@ class TestAgentName:
         assert {agent.value for agent in AgentName} == {
             "guardrail_in",
             "orchestrator",
-            "faq_agent",
-            "report_agent",
+            "faq",
+            "report",
             "predict_model",
-            "formatter_agent",
-            "judge_agent",
+            "formatter",
+            "judge",
             "guardrail_out",
+            "END",
+            "START",
         }
 
     def test_members_serialize_as_their_string_value(self):
@@ -70,7 +73,7 @@ class TestAgentResponse:
 
     def test_content_is_required(self):
         with pytest.raises(ValidationError):
-            AgentResponse()
+            AgentResponse(content=cast(Any, None))
 
 
 class TestMessage:
@@ -93,12 +96,12 @@ class TestMessage:
 
     def test_parses_uuid_and_enum_values_from_strings(self):
         message = Message(
-            user_id="11111111-1111-1111-1111-111111111111",
-            thread_id="22222222-2222-2222-2222-222222222222",
-            role="assistant",
+            user_id=cast(Any, "11111111-1111-1111-1111-111111111111"),
+            thread_id=cast(Any, "22222222-2222-2222-2222-222222222222"),
+            role=cast(Any, "assistant"),
             content="olá",
-            agent="judge_agent",
-            created_at="2026-07-16T12:00:00Z",
+            agent=cast(Any, "judge"),
+            created_at=cast(Any, "2026-07-16T12:00:00Z"),
         )
 
         assert message.user_id == UUID("11111111-1111-1111-1111-111111111111")
@@ -110,7 +113,7 @@ class TestMessage:
             Message(
                 user_id=user_id,
                 thread_id=thread_id,
-                role="moderator",
+                role=cast(Any, "moderator"),
                 content="olá",
                 created_at=datetime.now(timezone.utc),
             )
@@ -118,7 +121,7 @@ class TestMessage:
     def test_rejects_a_malformed_uuid(self, thread_id):
         with pytest.raises(ValidationError):
             Message(
-                user_id="not-a-uuid",
+                user_id=cast(Any, "not-a-uuid"),
                 thread_id=thread_id,
                 role=Role.USER,
                 content="olá",
@@ -146,7 +149,7 @@ class TestMessage:
 
         assert dumped["user_id"] == str(message.user_id)
         assert dumped["role"] == "user"
-        assert dumped["agent"] == "faq_agent"
+        assert dumped["agent"] == "faq"
         assert Message.model_validate(dumped) == message
 
 
@@ -186,7 +189,7 @@ class TestThread:
 
     def test_rejects_a_non_message_entry(self, user_id, thread_id):
         with pytest.raises(ValidationError):
-            Thread(user_id=user_id, thread_id=thread_id, messages=["olá"])
+            Thread(user_id=user_id, thread_id=thread_id, messages=cast(Any, ["olá"]))
 
 
 class TestState:
