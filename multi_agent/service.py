@@ -36,7 +36,7 @@ from .entity import State
 # agents imports
 from entity import AgentName
 
-from agents.guardrail import guardrail_in_func, guardrail_in_fate_decision, guardrail_out_func
+from agents.guardrail import Guardrail
 from agents.orchestrator import orchestrator_fate_decision
 
 # exceptions
@@ -47,6 +47,7 @@ class MultiAgentService(IMultiAgentService):
 
     graph: StateGraph[State]
     __compiled_graph: CompiledStateGraph[State]
+    guardrail: Guardrail
 
     def __init__(self, repository: IMultiAgentRepository, envs: Environments, logger: logger):
         self.repository = repository
@@ -109,26 +110,26 @@ class MultiAgentService(IMultiAgentService):
             system_prompt=GUARDRAIL_OUT_SYSTEM_PROMPT_FINAL,
         )
 
-        
+        self.guardrail = Guardrail(guardrail_in_agent, guardrail_out_agent)
 
         # initializes the state graph
         new_graph = StateGraph(State)
 
         new_graph.set_entry_point(AgentName.GUARDRAIL_IN)
 
-        new_graph.add_node(AgentName.GUARDRAIL_IN, guardrail_in_func)
+        new_graph.add_node(AgentName.GUARDRAIL_IN, self.guardrail.guardrail_in_func)
         new_graph.add_node(AgentName.ORCHESTRATOR, orchestrator_agent)
         new_graph.add_node(AgentName.PREDICT_MODEL, predict_model_agent)
         new_graph.add_node(AgentName.REPORT_AGENT, report_agent)
         new_graph.add_node(AgentName.FAQ_AGENT, faq_agent)
         new_graph.add_node(AgentName.FORMATTER_AGENT, formatter_agent)
         new_graph.add_node(AgentName.JUDGE_AGENT, judge_agent)
-        new_graph.add_node(AgentName.GUARDRAIL_OUT, guardrail_out_func)
+        new_graph.add_node(AgentName.GUARDRAIL_OUT, self.guardrail.guardrail_out_func)
 
         new_graph.add_conditional_edges(
             AgentName.GUARDRAIL_IN,
 
-            guardrail_in_fate_decision,
+            self.guardrail.guardrail_in_fate_decision,
             {
                 AgentName.ORCHESTRATOR: AgentName.ORCHESTRATOR,
                 AgentName.END: AgentName.GUARDRAIL_OUT,
