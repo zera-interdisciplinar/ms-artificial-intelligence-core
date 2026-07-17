@@ -69,7 +69,7 @@ class Thread(BaseModel):
     
 class State(MessagesState):
     """
-    Represents the state of the multi-agent system. The state is a collection of threads, where each thread is identified by a user_id and a thread_id.
+    Represents the state of the multi-agent system.
     """
 
     called_agents: Annotated[list[AgentName], operator.add]
