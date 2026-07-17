@@ -43,4 +43,7 @@ class Environments:
         self.MONGO_DB_NAME = os.getenv("MONGO_DB_NAME", "ms-artificial-intelligence-core")
         self.MONGO_USERNAME = os.getenv("MONGO_USERNAME", "root")
         self.MONGO_PASSWORD = os.getenv("MONGO_PASSWORD")
+
+        # Agents
+        self.GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
         

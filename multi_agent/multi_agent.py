@@ -3,8 +3,11 @@ Define the interface for multi-agent contracts and repository (interface).
 """
 
 from typing import Protocol, runtime_checkable
-from .entity import Message, AgentResponse
+from .entity import Message, AgentResponse, State
 from uuid import UUID
+
+from langgraph.graph import StateGraph, START, END
+from langgraph.graph.state import CompiledStateGraph
 
 @runtime_checkable
 class IMultiAgentRepository(Protocol):
@@ -49,6 +52,19 @@ class IMultiAgentRepository(Protocol):
 @runtime_checkable
 class IMultiAgentService(Protocol):
     """Interface for the multi-agent service."""
+
+    repository: IMultiAgentRepository
+    graph: StateGraph[State]
+    __app: CompiledStateGraph[State]
+
+    def setup(self, repository: IMultiAgentRepository) -> None:
+        """
+        Setup the multi-agent service, initializing any necessary components.
+        Raise MultiAgentServiceException if the setup fails.
+
+        this setup also creates the langgraph graph and the langgraph agent, which are used to process messages and generate responses.
+        """
+        ...
 
     def process_message(
         self, message: str, user_id: UUID, thread_id: UUID

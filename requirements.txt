@@ -4,6 +4,8 @@ uvicorn
 
 # Agents
 langgraph
+langchain
+langchain_google_genai
 
 # Database
 pymongo

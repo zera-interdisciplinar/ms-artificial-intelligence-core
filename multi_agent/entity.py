@@ -73,4 +73,34 @@ class State(MessagesState):
     """
 
     called_agents: Annotated[list[AgentName], operator.add]
+
+    # routing
+    next_agent: str | None  # an AgentName value, or "END"
+    intent: str | None
+
+    # guardrails
+    blocked: bool
+    blocked_reason: str | None
+
+    # faq_agent
+    answer: str | None
+    sources: list[str]
+
+    # report_agent
+    report_header: str | None
+    report_body: str | None
+    report_footer: str | None
+
+    # predict_model
+    predictions: list[dict[str, Any]]
+
+    # formatter_agent
+    formatted_response: str | None
+
+    # judge_agent
+    approved: bool | None
+    discrepancy: str | None
+
+    # guardrail_out
+    final_response: str | None
     
