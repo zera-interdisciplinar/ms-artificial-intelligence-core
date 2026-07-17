@@ -1,5 +1,7 @@
 from typing import Protocol, runtime_checkable, cast
 
+from langchain.messages import HumanMessage
+
 from multi_agent.multi_agent import IMultiAgentRepository, IMultiAgentService
 
 from .entity import Message, AgentResponse, State
@@ -162,9 +164,13 @@ class MultiAgentService(IMultiAgentService):
         if self.__compiled_graph is None:
             raise MultiAgentServiceNotSetupException("The multi-agent service is not set up. Please call the setup() method before processing messages.")
         
+        # initial state merges the last state from memory saver with the new one.
+        # the merge works in this way: if the value contains a reducer, it will be reduced with the new value, otherwise it will be replaced by the new value.
+        # we clear most of the values from the last state because they are procedural informations from each execution of the graph.
         initial_state = cast(
             State,
             {
+                "messages": [HumanMessage(content=message)],
                 "called_agents": [],
 
                 # routing
@@ -199,6 +205,8 @@ class MultiAgentService(IMultiAgentService):
             },
         )
         
+        # executes the graph with the initial state and the user_id and thread_id as configurable parameters to get the last state of the graph.
+        # invoke() also retreives the last state from the memory saver and merges it with the initial state, so we can get the last state of the graph.
         end_state = self.__compiled_graph.invoke(
             initial_state,
             config = {
