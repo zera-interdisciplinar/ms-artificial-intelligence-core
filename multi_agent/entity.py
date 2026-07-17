@@ -20,12 +20,15 @@ class Role(str, Enum):
 class AgentName(str, Enum):
     GUARDRAIL_IN = "guardrail_in"
     ORCHESTRATOR = "orchestrator"
-    FAQ_AGENT = "faq_agent"
-    REPORT_AGENT = "report_agent"
+    FAQ_AGENT = "faq"
+    REPORT_AGENT = "report"
     PREDICT_MODEL = "predict_model"
-    FORMATTER_AGENT = "formatter_agent"
-    JUDGE_AGENT = "judge_agent"
+    FORMATTER_AGENT = "formatter"
+    JUDGE_AGENT = "judge"
     GUARDRAIL_OUT = "guardrail_out"
+
+    END = "END"  # special value to indicate the end of the flow
+    START = "START"  # special value to indicate the start of the flow
 
 
 class AgentResponse(BaseModel):
