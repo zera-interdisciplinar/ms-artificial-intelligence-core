@@ -29,3 +29,12 @@ Agente responsável por julgar a resposta final do sistema, verificando se ela e
 
 ### guardrail_out
 Agente do guardrail de saída, responsável por verificar a resposta final do sistema antes de enviá-la para o usuário. Ele recebe o Estado já modificado durante o fluxo, e verifica se a resposta final está de acordo com as instruções do prompt, e se a resposta vai contra alguma diretriz de segurança. Caso a resposta final não esteja de acordo com as instruções do prompt, ou se ela vai contra alguma diretriz de segurança, o GuardrailOut pode solicitar ajustes na resposta final, ou retornar uma mensagem de erro apropriada.
+
+
+# Decisões tecnicas
+
+1- em agents/guardrail.py criamos uma classe, já nos outros agentes criamos apenas funções (com make_func). Essa escolha foi feita por dois motivos principais: Primeiro, o guardrail aparece em dois lugares do fluxo, no inicio e no final, e possui lógica interna mais complexa. Segundo, a classe permite que o guardrail guarde o mapa pii, garantindo que essas informações não sejam expostas no estado. Os outros agentes possuem wrappers apenas para fazer alterações no estado, e não possuem lógica interna complexa, por isso optamos por funções simples.
+
+2- judge_agent, formatter_agent, faq_agent e report_agent eram adicionados ao grafo como nós crus (create_agent(...) direto), assim como orchestrator e predict_model. Esses nós só devolvem {"messages": [...]}, nunca escrevem nas chaves próprias do estado (formatted_response, approved, discrepancy, answer, sources, report_header/body/footer). Criamos wrappers (make_judge_func, make_formatter_func, make_faq_func, make_report_func) que fazem o parse do JSON da última mensagem do agente e projetam isso de volta no estado, seguindo o mesmo padrão já usado em Guardrail.guardrail_in_func/guardrail_out_func.
+
+4- no payload enviado para judge_agent (e nos demais agentes que recebem um JSON serializado como turno de entrada, ex: guardrail_out_func), usamos HumanMessage em vez de SystemMessage. Essa lista de mensagens é local à chamada .invoke() do sub-agente (não é state["messages"]), então não suja o histórico persistido da conversa. Preferimos HumanMessage porque create_agent já injeta o system_prompt do módulo como a única mensagem de sistema do sub-agente; a maioria dos provedores (incluindo Gemini) espera exatamente uma instrução de sistema mais turnos human/AI, então empilhar uma segunda SystemMessage com o payload é frágil (pode ser rejeitado ou descartado dependendo do provedor). (AI)

@@ -80,7 +80,7 @@ class State(MessagesState):
     called_agents: Annotated[list[AgentName], operator.add]
 
     # routing
-    next_agent: str | None  # an AgentName value, or "END"
+    next_agent: AgentName | None  # an AgentName value
     intent: str | None
 
     # guardrails
@@ -105,6 +105,7 @@ class State(MessagesState):
     # judge_agent
     approved: bool | None
     discrepancy: str | None
+    judge_attempts: Annotated[int, operator.add]
 
     # guardrail_out
     final_response: str | None

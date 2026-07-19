@@ -84,7 +84,7 @@ class TestSetup:
         mock_graph = mock_state_graph.return_value
         mock_graph.compile.return_value = MagicMock()
 
-        service.setup(repository=cast(Any, MagicMock()))
+        service.setup()
 
         assert mock_llm.called
         assert mock_create_agent.call_count == 8

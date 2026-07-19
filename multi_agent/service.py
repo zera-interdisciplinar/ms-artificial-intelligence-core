@@ -39,6 +39,10 @@ from entity import AgentName
 
 from agents.guardrail import Guardrail
 from agents.orchestrator import orchestrator_fate_decision
+from agents.faq import make_faq_func
+from agents.report import make_report_func
+from agents.formatter import make_formatter_func
+from agents.judge import make_judge_func, judge_fate_decision
 
 # exceptions
 from exception import MultiAgentServiceNotSetupException
@@ -123,10 +127,10 @@ class MultiAgentService(IMultiAgentService):
         new_graph.add_node(AgentName.GUARDRAIL_IN, self.guardrail.guardrail_in_func)
         new_graph.add_node(AgentName.ORCHESTRATOR, orchestrator_agent)
         new_graph.add_node(AgentName.PREDICT_MODEL, predict_model_agent)
-        new_graph.add_node(AgentName.REPORT_AGENT, report_agent)
-        new_graph.add_node(AgentName.FAQ_AGENT, faq_agent)
-        new_graph.add_node(AgentName.FORMATTER_AGENT, formatter_agent)
-        new_graph.add_node(AgentName.JUDGE_AGENT, judge_agent)
+        new_graph.add_node(AgentName.REPORT_AGENT, make_report_func(report_agent))
+        new_graph.add_node(AgentName.FAQ_AGENT, make_faq_func(faq_agent))
+        new_graph.add_node(AgentName.FORMATTER_AGENT, make_formatter_func(formatter_agent))
+        new_graph.add_node(AgentName.JUDGE_AGENT, make_judge_func(judge_agent))
         new_graph.add_node(AgentName.GUARDRAIL_OUT, self.guardrail.guardrail_out_func)
 
         new_graph.add_conditional_edges(
@@ -155,7 +159,17 @@ class MultiAgentService(IMultiAgentService):
         new_graph.add_edge(AgentName.FAQ_AGENT, AgentName.FORMATTER_AGENT)
 
         new_graph.add_edge(AgentName.FORMATTER_AGENT, AgentName.JUDGE_AGENT)
-        new_graph.add_edge(AgentName.JUDGE_AGENT, AgentName.GUARDRAIL_OUT)
+
+        new_graph.add_conditional_edges(
+            AgentName.JUDGE_AGENT,
+
+            judge_fate_decision,
+            {
+                AgentName.ORCHESTRATOR: AgentName.ORCHESTRATOR,
+                AgentName.GUARDRAIL_OUT: AgentName.GUARDRAIL_OUT,
+            }
+        )
+
         new_graph.add_edge(AgentName.GUARDRAIL_OUT, AgentName.END)
 
         self.graph = new_graph
@@ -203,6 +217,7 @@ class MultiAgentService(IMultiAgentService):
                 # judge_agent
                 "approved": None,
                 "discrepancy": None,
+                "judge_attempts": 0,
 
                 # guardrail_out
                 "final_response": None,
