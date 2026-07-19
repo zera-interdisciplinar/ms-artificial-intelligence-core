@@ -34,6 +34,7 @@ class Environments:
         
         #Environment
         self.APP_ENV = os.getenv("APP_ENV", "DEV")
+        self.APP_PORT = os.getenv("APP_PORT", "8000")
         
         # APIs
         self.GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
