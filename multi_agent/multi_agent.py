@@ -6,14 +6,16 @@ from typing import Optional, Protocol, runtime_checkable
 from .entity import Message, AgentResponse, State
 from uuid import UUID
 
-from langgraph.graph import StateGraph, START, END
+from langgraph.graph import StateGraph
 from langgraph.graph.state import CompiledStateGraph
+
+from _internal.mongo.setup import Repository
 
 @runtime_checkable
 class IMultiAgentRepository(Protocol):
     """Interface for the multi-agent repository."""
 
-    def setup(self) -> None:
+    def setup(self, repository: Repository) -> None:
         """
         Setup the AgentRepository, connecting to the database, setting up the collections, etc.
         Raise RepositoryException if the setup fails.
@@ -57,7 +59,7 @@ class IMultiAgentService(Protocol):
     graph: StateGraph[State]
     __compiled_graph: Optional[CompiledStateGraph[State]] = None
 
-    def setup(self, repository: IMultiAgentRepository) -> None:
+    def setup(self) -> None:
         """
         Setup the multi-agent service, initializing any necessary components.
         Raise MultiAgentServiceException if the setup fails.

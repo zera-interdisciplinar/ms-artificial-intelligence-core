@@ -4,8 +4,9 @@ from langchain.messages import HumanMessage
 
 from multi_agent.multi_agent import IMultiAgentRepository, IMultiAgentService
 
-from .entity import Message, AgentResponse, State
+from .entity import Message, AgentResponse, State, Role
 from uuid import UUID
+from datetime import datetime, timezone
 
 from langgraph.graph import StateGraph
 from langgraph.graph.state import CompiledStateGraph
@@ -56,7 +57,7 @@ class MultiAgentService(IMultiAgentService):
         self.envs = envs
         self.logger = logger
 
-    def setup(self, repository: IMultiAgentRepository) -> None:
+    def setup(self) -> None:
         """
         Setup the MultiAgentService with the provided repository.
         """
@@ -112,7 +113,7 @@ class MultiAgentService(IMultiAgentService):
             system_prompt=GUARDRAIL_OUT_SYSTEM_PROMPT_FINAL,
         )
 
-        self.guardrail = Guardrail(guardrail_in_agent, guardrail_out_agent)
+        self.guardrail = Guardrail(guardrail_in_agent, guardrail_out_agent, self.repository)
 
         # initializes the state graph
         new_graph = StateGraph(State)
@@ -220,6 +221,22 @@ class MultiAgentService(IMultiAgentService):
             }
         )
         
+        # the flow only leaves guardrail_in when blocked=False there; if blocked=True and
+        # formatted_response was never set, the flow stopped at guardrail_in, so we don't
+        # save a final message for it.
+        stopped_at_guardrail_in = end_state["blocked"] and end_state.get("formatted_response") is None
+
+        if not stopped_at_guardrail_in:
+            self.repository.save_message(
+                Message(
+                    user_id=user_id,
+                    thread_id=thread_id,
+                    role=Role.ASSISTANT,
+                    content=end_state["final_response"] or end_state["blocked_reason"] or "",
+                    agent=AgentName.GUARDRAIL_OUT,
+                    created_at=datetime.now(timezone.utc),
+                )
+            )
 
         return AgentResponse(
             content = end_state["final_response"],

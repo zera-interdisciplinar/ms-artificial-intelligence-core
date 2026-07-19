@@ -1,7 +1,12 @@
 from entity import State, AgentName
 from langchain.messages import HumanMessage, RemoveMessage
+from langchain_core.runnables import RunnableConfig
 import json
 import re
+from datetime import datetime, timezone
+
+from multi_agent.entity import Message, Role
+from multi_agent.multi_agent import IMultiAgentRepository
 
 # ==============================================
 # GENERAL CONSTANTS
@@ -37,14 +42,15 @@ class Guardrail:
         
         PII_MAP = dict()  # a dictionary that maps the masked PII to the original PII
 
-        def __init__(self, guardrail_in_agent, guardrail_out_agent):
+        def __init__(self, guardrail_in_agent, guardrail_out_agent, repository: IMultiAgentRepository):
                 self.guardrail_in_agent = guardrail_in_agent
                 self.guardrail_out_agent = guardrail_out_agent
+                self.repository = repository
 
         # ==============================================
         # GUARDRAIL IN FUNCTIONS
         # ==============================================
-        def guardrail_in_func(self, state: State) -> dict:
+        def guardrail_in_func(self, state: State, config: RunnableConfig) -> dict:
                 """
                 Function to handle the guardrail_in state. It works in this pipe: anonimize the user input + make the PII map -> use llm to classify the user input as safe or unsafe -> if unsafe, block the user input and return the reason, otherwise, return the user input to the orchestrator.
                 """
@@ -67,6 +73,21 @@ class Guardrail:
                 )
 
                 classification = json.loads(guardrail_in_response["messages"][-1].content)
+
+                configurable = config.get("configurable") or {}
+                
+                # saves the message only if it is not blocked, otherwise, it will be blocked and not saved in the database.
+                if not classification["blocked"]:
+                    self.repository.save_message(
+                        Message(
+                            user_id=configurable["user_id"],
+                            thread_id=configurable["thread_id"],
+                            role=Role.USER,
+                            content=anonimized_input,
+                            agent=AgentName.GUARDRAIL_IN,
+                            created_at=datetime.now(timezone.utc),
+                        )
+                    )
 
                 return {
                     "messages": [RemoveMessage(id=original_message_id), masked_message],
