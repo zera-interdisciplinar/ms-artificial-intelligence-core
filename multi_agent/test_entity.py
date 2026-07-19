@@ -36,8 +36,8 @@ class TestAgentName:
             "formatter",
             "judge",
             "guardrail_out",
-            "END",
-            "START",
+            "__end__",
+            "__start__",
         }
 
     def test_members_serialize_as_their_string_value(self):

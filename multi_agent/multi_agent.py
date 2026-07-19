@@ -2,7 +2,7 @@
 Define the interface for multi-agent contracts and repository (interface).
 """
 
-from typing import Protocol, runtime_checkable
+from typing import Optional, Protocol, runtime_checkable
 from .entity import Message, AgentResponse, State
 from uuid import UUID
 
@@ -55,7 +55,7 @@ class IMultiAgentService(Protocol):
 
     repository: IMultiAgentRepository
     graph: StateGraph[State]
-    __app: CompiledStateGraph[State]
+    __compiled_graph: Optional[CompiledStateGraph[State]] = None
 
     def setup(self, repository: IMultiAgentRepository) -> None:
         """

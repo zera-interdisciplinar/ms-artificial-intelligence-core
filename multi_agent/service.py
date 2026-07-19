@@ -7,7 +7,7 @@ from multi_agent.multi_agent import IMultiAgentRepository, IMultiAgentService
 from .entity import Message, AgentResponse, State
 from uuid import UUID
 
-from langgraph.graph import StateGraph, START, END
+from langgraph.graph import StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
 from config.environments import Environments
@@ -42,11 +42,13 @@ from agents.orchestrator import orchestrator_fate_decision
 # exceptions
 from exception import MultiAgentServiceNotSetupException
 
+from typing import Optional
+
 class MultiAgentService(IMultiAgentService):
     """Concrete implementation of the multi-agent service."""
 
     graph: StateGraph[State]
-    __compiled_graph: CompiledStateGraph[State]
+    __compiled_graph: Optional[CompiledStateGraph[State]] = None
     guardrail: Guardrail
 
     def __init__(self, repository: IMultiAgentRepository, envs: Environments, logger: logger):
@@ -132,7 +134,7 @@ class MultiAgentService(IMultiAgentService):
             self.guardrail.guardrail_in_fate_decision,
             {
                 AgentName.ORCHESTRATOR: AgentName.ORCHESTRATOR,
-                AgentName.END: AgentName.GUARDRAIL_OUT,
+                AgentName.END: AgentName.END,
             }
         )
 

@@ -11,6 +11,8 @@ from datetime import datetime
 from langgraph.graph import MessagesState
 from pydantic import BaseModel
 
+from langgraph.graph import START, END
+
 # enum for the role of the message sender
 class Role(str, Enum):
     USER = "user"
@@ -27,8 +29,8 @@ class AgentName(str, Enum):
     JUDGE_AGENT = "judge"
     GUARDRAIL_OUT = "guardrail_out"
 
-    END = "END"  # special value to indicate the end of the flow
-    START = "START"  # special value to indicate the start of the flow
+    END = END  # special value to indicate the end of the flow
+    START = START  # special value to indicate the start of the flow
 
 
 class AgentResponse(BaseModel):
