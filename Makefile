@@ -2,7 +2,7 @@
 
 PYTHON ?= python
 PIP ?= pip
-PYTEST ?= pytest
+PYTEST ?= ./zera-ai-core/bin/pytest -q
 UVICORN ?= uvicorn
 COMPOSE ?= docker compose
 
@@ -33,7 +33,7 @@ install:
 test:
 	$(PYTEST)
 
-test-cov:
+coverage:
 	$(PYTEST) --cov=. --cov-report=xml --cov-fail-under=$(COVERAGE_MIN)
 
 run:
