@@ -1,4 +1,4 @@
-from entity import State, AgentName
+from ..entity import State, AgentName
 from langchain.messages import HumanMessage, RemoveMessage
 from langchain_core.runnables import RunnableConfig
 import json
@@ -7,6 +7,8 @@ from datetime import datetime, timezone
 
 from multi_agent.entity import Message, Role
 from multi_agent.multi_agent import IMultiAgentRepository
+
+from logger.logger import logger
 
 # ==============================================
 # GENERAL CONSTANTS
@@ -42,10 +44,11 @@ class Guardrail:
         
         PII_MAP = dict()  # a dictionary that maps the masked PII to the original PII
 
-        def __init__(self, guardrail_in_agent, guardrail_out_agent, repository: IMultiAgentRepository):
+        def __init__(self, guardrail_in_agent, guardrail_out_agent, repository: IMultiAgentRepository, logger: logger):
                 self.guardrail_in_agent = guardrail_in_agent
                 self.guardrail_out_agent = guardrail_out_agent
                 self.repository = repository
+                self.logger = logger
 
         # ==============================================
         # GUARDRAIL IN FUNCTIONS
@@ -58,26 +61,36 @@ class Guardrail:
                 original_message = state["messages"][-1]
                 original_message_id = original_message.id
                 assert original_message_id is not None
-                
+
                 user_input = original_message.content  # get the last message from the user
 
+                self.logger.Debug(f"Guardrail in: received message id={original_message_id}")
+                self.logger.Debug(f"Guardrail in: original content preview={user_input}")
+
                 anonimized_input, pii_map = self._remove_pii_from_text(user_input)
+
+                self.logger.Info(f"Guardrail in: detected {len(pii_map)} PII items")
+                self.logger.Debug(f"Guardrail in: pii_map={json.dumps(pii_map)}")
 
                 self.PII_MAP.update(pii_map)
 
                 masked_message = HumanMessage(content=anonimized_input)
 
                 # call the guardrail_in_agent to classify the user input as safe or unsafe
+                self.logger.Info("Guardrail in: invoking guardrail_in_agent for classification")
                 guardrail_in_response = self.guardrail_in_agent.invoke(
                     {"messages": [masked_message]}
                 )
 
+                self.logger.Info(f"Guardrail In Response: {guardrail_in_response['messages'][-1].content}")
+
                 classification = json.loads(guardrail_in_response["messages"][-1].content)
 
                 configurable = config.get("configurable") or {}
-                
+
                 # saves the message only if it is not blocked, otherwise, it will be blocked and not saved in the database.
                 if not classification["blocked"]:
+                    self.logger.Info("Guardrail in: message not blocked, saving to repository")
                     self.repository.save_message(
                         Message(
                             user_id=configurable["user_id"],
@@ -88,6 +101,8 @@ class Guardrail:
                             created_at=datetime.now(timezone.utc),
                         )
                     )
+                else:
+                    self.logger.Warning(f"Guardrail in: message blocked for reason: {classification.get('blocked_reason')}")
 
                 return {
                     "messages": [RemoveMessage(id=original_message_id), masked_message],
@@ -131,13 +146,17 @@ class Guardrail:
                 formatted_response = state["formatted_response"]
 
                 # call the guardrail_out_agent to validate the formatted response as safe or unsafe
+                self.logger.Info("Guardrail out: invoking guardrail_out_agent for final validation")
                 guardrail_out_response = self.guardrail_out_agent.invoke(
                     {"messages": [HumanMessage(content=json.dumps({"formatted_response": formatted_response}))]}
                 )
 
+                self.logger.Debug(f"Guardrail out raw response={guardrail_out_response['messages'][-1].content}")
                 classification = json.loads(guardrail_out_response["messages"][-1].content)
+                self.logger.Debug(f"Guardrail out: classification={json.dumps(classification)}")
 
                 if classification["blocked"]:
+                        self.logger.Warning(f"Guardrail out: response blocked for reason: {classification.get('blocked_reason')}")
                         return {
                             "blocked": classification["blocked"],
                             "blocked_reason": classification["blocked_reason"],
@@ -145,6 +164,8 @@ class Guardrail:
                         }
 
                 final_response = self._retreive_pii_from_text(formatted_response, self.PII_MAP)
+                self.logger.Debug(f"Guardrail out: final_response preview={final_response[:200]}")
+                self.logger.Info("Guardrail out: returning final response to user")
 
                 return {
                     "blocked": classification["blocked"],

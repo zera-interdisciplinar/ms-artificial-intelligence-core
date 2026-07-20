@@ -1,4 +1,4 @@
-from typing import Protocol, runtime_checkable, cast
+from typing import cast
 
 from langchain.messages import HumanMessage
 
@@ -15,14 +15,14 @@ from config.environments import Environments
 from logger.logger import logger
 
 # completed prompts
-from prompt.guardrail_in import GUARDRAIL_IN_SYSTEM_PROMPT_FINAL
-from prompt.orchestrator import ORCHESTRATOR_SYSTEM_PROMPT_FINAL
-from prompt.predict_model import PREDICT_MODEL_SYSTEM_PROMPT_FINAL
-from prompt.report_agent import REPORT_AGENT_SYSTEM_PROMPT_FINAL
-from prompt.faq_agent import FAQ_AGENT_SYSTEM_PROMPT_FINAL
-from prompt.formatter_agent import FORMATTER_AGENT_SYSTEM_PROMPT_FINAL
-from prompt.judge_agent import JUDGE_AGENT_SYSTEM_PROMPT_FINAL
-from prompt.guardrail_out import GUARDRAIL_OUT_SYSTEM_PROMPT_FINAL
+from .prompt.guardrail_in import GUARDRAIL_IN_SYSTEM_PROMPT_FINAL
+from .prompt.orchestrator import ORCHESTRATOR_SYSTEM_PROMPT_FINAL
+from .prompt.predict_model import PREDICT_MODEL_SYSTEM_PROMPT_FINAL
+from .prompt.report_agent import REPORT_AGENT_SYSTEM_PROMPT_FINAL
+from .prompt.faq_agent import FAQ_AGENT_SYSTEM_PROMPT_FINAL
+from .prompt.formatter_agent import FORMATTER_AGENT_SYSTEM_PROMPT_FINAL
+from .prompt.judge_agent import JUDGE_AGENT_SYSTEM_PROMPT_FINAL
+from .prompt.guardrail_out import GUARDRAIL_OUT_SYSTEM_PROMPT_FINAL
 
 # checkpointer
 from langgraph.checkpoint.memory import MemorySaver
@@ -35,17 +35,17 @@ from langchain.agents import create_agent
 from .entity import State
 
 # agents imports
-from entity import AgentName
+from .entity import AgentName
 
-from agents.guardrail import Guardrail
-from agents.orchestrator import orchestrator_fate_decision
-from agents.faq import make_faq_func
-from agents.report import make_report_func
-from agents.formatter import make_formatter_func
-from agents.judge import make_judge_func, judge_fate_decision
+from .agents.guardrail import Guardrail
+from .agents.orchestrator import orchestrator_fate_decision
+from .agents.faq import make_faq_func
+from .agents.report import make_report_func
+from .agents.formatter import make_formatter_func
+from .agents.judge import make_judge_func, judge_fate_decision
 
 # exceptions
-from exception import MultiAgentServiceNotSetupException
+from .exception import MultiAgentServiceNotSetupException
 
 from typing import Optional
 
@@ -117,7 +117,7 @@ class MultiAgentService(IMultiAgentService):
             system_prompt=GUARDRAIL_OUT_SYSTEM_PROMPT_FINAL,
         )
 
-        self.guardrail = Guardrail(guardrail_in_agent, guardrail_out_agent, self.repository)
+        self.guardrail = Guardrail(guardrail_in_agent, guardrail_out_agent, self.repository, self.logger)
 
         # initializes the state graph
         new_graph = StateGraph(State)
@@ -180,6 +180,7 @@ class MultiAgentService(IMultiAgentService):
     def process_message(self, message: str, user_id: UUID, thread_id: UUID) -> AgentResponse:
         # certifies that the graph is already compiled
         if self.__compiled_graph is None:
+            self.logger.Error("The multi-agent service is not set up. Please call the setup() method before processing messages.", MultiAgentServiceNotSetupException)
             raise MultiAgentServiceNotSetupException("The multi-agent service is not set up. Please call the setup() method before processing messages.")
         
         # initial state merges the last state from memory saver with the new one.
@@ -226,6 +227,9 @@ class MultiAgentService(IMultiAgentService):
         
         # executes the graph with the initial state and the user_id and thread_id as configurable parameters to get the last state of the graph.
         # invoke() also retreives the last state from the memory saver and merges it with the initial state, so we can get the last state of the graph.
+        
+        self.logger.Info(f"Processing message for user_id: {user_id}, thread_id: {thread_id}")
+        
         end_state = self.__compiled_graph.invoke(
             initial_state,
             config = {
@@ -242,6 +246,9 @@ class MultiAgentService(IMultiAgentService):
         stopped_at_guardrail_in = end_state["blocked"] and end_state.get("formatted_response") is None
 
         if not stopped_at_guardrail_in:
+            
+            self.logger.Info(f"Saving message for user_id: {user_id}, thread_id: {thread_id}, content: {end_state['final_response'] or end_state['blocked_reason'] or ''}")
+            
             self.repository.save_message(
                 Message(
                     user_id=user_id,
@@ -252,6 +259,8 @@ class MultiAgentService(IMultiAgentService):
                     created_at=datetime.now(timezone.utc),
                 )
             )
+            
+        self.logger.Info(f"Finished processing message for user_id: {user_id}, thread_id: {thread_id}")
 
         return AgentResponse(
             content = end_state["final_response"],

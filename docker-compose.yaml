@@ -1,10 +1,29 @@
+# servicos da nossa aplicação
 services:
-  mongo:
-    image: mongo:7
-    ports:
-      - "27017:27017"
-    volumes:
-      - mongo_data:/data/db
 
+  # serviço de API
+  api:
+    build: . # Build da imagem docker a partir do Dockerfile na raiz do projeto
+    container_name: ms-artificial-intelligence-core-api
+    ports:
+      - "8000:8000" # Mapeia a porta 8000 do container para a porta 8000 do host
+    env_file:
+      - .env
+    depends_on:
+      - mongo # Garante que o serviço de banco de dados seja iniciado antes da API
+  
+  # banco de dados usado pela API
+  mongo:
+    image: mongo:8
+    container_name: mongodb
+    ports:
+      - "27017:27017" # Mapeia a porta 27017 do container para a porta 27017 do host
+    volumes:
+      - mongo-data:/data/db # Persiste os dados do MongoDB em um volume
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=${MONGO_USERNAME}
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_PASSWORD}
+
+# volumes para persistência de dados
 volumes:
-  mongo_data:
+  mongo-data:

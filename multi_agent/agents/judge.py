@@ -1,7 +1,11 @@
 import json
 
-from entity import State, AgentName
+from ..entity import State, AgentName
 from langchain.messages import HumanMessage, SystemMessage, AIMessage
+from logger.logger import logger
+
+# module-level logger instance
+_logger = logger()
 
 # total number of judge_agent evaluations allowed per user message: 1 execution + 1 retry.
 MAX_JUDGE_ATTEMPTS = 2
@@ -17,6 +21,7 @@ def make_judge_func(judge_agent):
 
     def judge_func(state: State) -> dict:
         request = state["messages"][0].content
+        _logger.Debug(f"Judge: request preview={request}")
 
         response = judge_agent.invoke(
             {
@@ -32,8 +37,11 @@ def make_judge_func(judge_agent):
                 ]
             }
         )
+        _logger.Info("Judge agent invoked")
+        _logger.Debug(f"Judge raw response={response['messages'][-1].content}")
 
         classification = json.loads(response["messages"][-1].content)
+        _logger.Debug(f"Judge classification={classification}")
         approved = classification["approved"]
         discrepancy = classification["discrepancy"]
 
@@ -48,6 +56,7 @@ def make_judge_func(judge_agent):
         will_retry = not approved and attempts_done < MAX_JUDGE_ATTEMPTS
 
         if will_retry:
+            _logger.Warning(f"Judge: will retry due to discrepancy={discrepancy}")
             result.update(
                 {
                     "next_agent": None,

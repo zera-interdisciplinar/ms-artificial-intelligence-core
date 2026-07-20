@@ -6,7 +6,7 @@ import pytest
 
 from langgraph.checkpoint.memory import InMemorySaver
 
-from exception import MultiAgentServiceNotSetupException
+from .exception import MultiAgentServiceNotSetupException
 from multi_agent.entity import AgentName, AgentResponse
 from multi_agent.service import MultiAgentService
 

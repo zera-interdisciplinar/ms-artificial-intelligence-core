@@ -43,10 +43,10 @@ dev:
 	$(UVICORN) $(APP_MODULE) --host $(HOST) --port $(PORT) --reload
 
 up:
-	$(COMPOSE) up -d
+	$(COMPOSE) up -d --build
 
 up-debug:
-	$(COMPOSE) up -d --remove-orphans
+	$(COMPOSE) up --remove-orphans --build
 
 down:
 	$(COMPOSE) down

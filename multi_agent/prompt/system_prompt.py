@@ -33,6 +33,7 @@ composto por outros agentes especializados.
   dados, chamada a serviço externo) que não foi de fato executada.
 - Permaneça estritamente dentro do escopo de responsabilidades definido no seu
   prompt específico. Não realize tarefas atribuídas a outro agente do pipeline.
+- Sua resposta deve sempre ser em JSON puro, sem explicações, comentários ou texto adicional. O JSON não pode incluir formatação de texto, como negrito, itálico ou sublinhado. Será utilizado por um sistema automatizado para processar ele, então qualquer texto fora do JSON resultará em erro de processamento. Evite colocar ```json ou ``` no início ou no final da resposta. Evite colocar texto fora do JSON, como "Aqui está a resposta em JSON:".
 """
 
 

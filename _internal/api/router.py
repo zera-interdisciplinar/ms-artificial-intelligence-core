@@ -44,7 +44,8 @@ class RouterAPI:
         
         uvicorn_run(
             app = self._app,
-            port = int(self.envs.APP_PORT)
+            port = int(self.envs.APP_PORT),
+            host = self.envs.APP_HOST,
         )
         
         

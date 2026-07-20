@@ -1,0 +1,36 @@
+{
+  "info": {
+    "name": "ms-artificial-intelligence-core - Multi Agent",
+    "_postman_id": "b1e6d2f2-0000-4000-8000-000000000000",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8000",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Process Message",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"user_id\": \"11111111-1111-1111-1111-111111111111\",\n  \"thread_id\": \"22222222-2222-2222-2222-222222222222\",\n  \"role\": \"user\",\n  \"content\": \"Olá, preciso de ajuda com meu pedido.\",\n  \"agent\": null,\n  \"created_at\": \"2026-07-19T12:00:00Z\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/multi-agent/process-message"
+        }
+      },
+      "response": []
+    }
+  ]
+}

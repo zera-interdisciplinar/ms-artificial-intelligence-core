@@ -17,6 +17,8 @@ nenhum trecho recuperado for suficiente para responder, informe que não foi
 encontrada informação suficiente, em vez de produzir uma resposta especulativa.
 Não realize geração de relatório, previsão ou formatação; essas responsabilidades
 são de report_agent, predict_model e formatter_agent, respectivamente.
+
+Se não encontrar uma resposta válida, diga que não sabe e tente fazer o usuário estruturar melhor a pergunta.
 """
 
 FORWARDING_PROTOCOL: str = """

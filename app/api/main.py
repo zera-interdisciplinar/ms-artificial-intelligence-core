@@ -1,9 +1,7 @@
 """FastAPI application entrypoint for the Zera ms-artificial-intelligence-core service."""
 
-from fastapi import FastAPI, APIRouter
 from logger.logger import logger
 from config.environments import Environments
-from pymongo import MongoClient
 from _internal.mongo.setup import Repository
 
 # MultiAgentRepository imports
@@ -29,6 +27,8 @@ repository = Repository(envs)
 multi_agent_repository: IMultiAgentRepository = MultiAgentRepository()
 multi_agent_repository.setup(repository)
 
+myLogger.Info("MultiAgentRepository setup complete")
+
 # create the multi-agent service instance
 multi_agent_service: IMultiAgentService = MultiAgentService(
     repository=multi_agent_repository,
@@ -36,6 +36,8 @@ multi_agent_service: IMultiAgentService = MultiAgentService(
     logger=myLogger
 )
 multi_agent_service.setup()
+
+myLogger.Info("MultiAgentService setup complete")
 
 # create the FastAPI app and router
 app = RouterAPI(envs, myLogger)
@@ -45,4 +47,5 @@ app.BuildAPI(multi_agent_service)
 
 # list-and-serve the API endpoints
 if __name__ == "__main__":
+    myLogger.Info("Starting ms-artificial-intelligence-core service")
     app.run()
