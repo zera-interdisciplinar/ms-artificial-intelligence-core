@@ -26,6 +26,7 @@ def guardrail():
         guardrail_in_agent=MagicMock(),
         guardrail_out_agent=MagicMock(),
         repository=MagicMock(),
+        logger=MagicMock(),
     )
 
 
@@ -169,10 +170,16 @@ class TestPiiMapIsSharedBetweenInstances:
     def test_pii_map_is_a_class_level_attribute(self):
         """Documents current behavior: PII_MAP is shared across Guardrail instances."""
         first = Guardrail(
-            guardrail_in_agent=MagicMock(), guardrail_out_agent=MagicMock(), repository=MagicMock()
+            guardrail_in_agent=MagicMock(),
+            guardrail_out_agent=MagicMock(),
+            repository=MagicMock(),
+            logger=MagicMock(),
         )
         second = Guardrail(
-            guardrail_in_agent=MagicMock(), guardrail_out_agent=MagicMock(), repository=MagicMock()
+            guardrail_in_agent=MagicMock(),
+            guardrail_out_agent=MagicMock(),
+            repository=MagicMock(),
+            logger=MagicMock(),
         )
 
         first.PII_MAP["<EMAIL_0>"] = "joao@example.com"

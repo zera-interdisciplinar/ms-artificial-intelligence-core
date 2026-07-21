@@ -1,4 +1,5 @@
 from ..entity import State, AgentName
+from .message_utils import parse_json_message
 from langchain.messages import HumanMessage, RemoveMessage
 from langchain_core.runnables import RunnableConfig
 import json
@@ -84,7 +85,7 @@ class Guardrail:
 
                 self.logger.Info(f"Guardrail In Response: {guardrail_in_response['messages'][-1].content}")
 
-                classification = json.loads(guardrail_in_response["messages"][-1].content)
+                classification = parse_json_message(guardrail_in_response["messages"][-1].content)
 
                 configurable = config.get("configurable") or {}
 
@@ -152,7 +153,7 @@ class Guardrail:
                 )
 
                 self.logger.Debug(f"Guardrail out raw response={guardrail_out_response['messages'][-1].content}")
-                classification = json.loads(guardrail_out_response["messages"][-1].content)
+                classification = parse_json_message(guardrail_out_response["messages"][-1].content)
                 self.logger.Debug(f"Guardrail out: classification={json.dumps(classification)}")
 
                 if classification["blocked"]:

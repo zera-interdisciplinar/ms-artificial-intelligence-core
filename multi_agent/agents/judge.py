@@ -1,6 +1,7 @@
 import json
 
 from ..entity import State, AgentName
+from .message_utils import parse_json_message
 from langchain.messages import HumanMessage, SystemMessage, AIMessage
 from logger.logger import logger
 
@@ -40,7 +41,7 @@ def make_judge_func(judge_agent):
         _logger.Info("Judge agent invoked")
         _logger.Debug(f"Judge raw response={response['messages'][-1].content}")
 
-        classification = json.loads(response["messages"][-1].content)
+        classification = parse_json_message(response["messages"][-1].content)
         _logger.Debug(f"Judge classification={classification}")
         approved = classification["approved"]
         discrepancy = classification["discrepancy"]

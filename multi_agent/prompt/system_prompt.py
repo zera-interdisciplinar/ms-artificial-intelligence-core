@@ -33,7 +33,36 @@ composto por outros agentes especializados.
   dados, chamada a serviço externo) que não foi de fato executada.
 - Permaneça estritamente dentro do escopo de responsabilidades definido no seu
   prompt específico. Não realize tarefas atribuídas a outro agente do pipeline.
-- Sua resposta deve sempre ser em JSON puro, sem explicações, comentários ou texto adicional. O JSON não pode incluir formatação de texto, como negrito, itálico ou sublinhado. Será utilizado por um sistema automatizado para processar ele, então qualquer texto fora do JSON resultará em erro de processamento. Evite colocar ```json ou ``` no início ou no final da resposta. Evite colocar texto fora do JSON, como "Aqui está a resposta em JSON:".
+## Formato de saída (obrigatório)
+- Sua resposta INTEIRA deve ser um único objeto JSON (`{...}`), e nada mais.
+- NUNCA retorne uma lista/array (`[...]`) como resposta de nível superior. O
+  nível superior é sempre um objeto.
+- NUNCA retorne uma string solta, número, booleano ou `null` como resposta de
+  nível superior.
+- NUNCA retorne uma string vazia, um objeto vazio (`{}`) ou qualquer resposta
+  em branco. Se não houver dados suficientes, preencha os campos do schema
+  esperado pelo seu prompt específico com valores nulos/vazios apropriados
+  (por exemplo, `null` ou `[]`), mas a estrutura do objeto deve sempre estar
+  presente e completa.
+- Use exatamente os campos (chaves) definidos no schema do seu prompt
+  específico. Não adicione, remova ou renomeie campos.
+- O JSON não pode incluir formatação de texto, como negrito, itálico ou
+  sublinhado, nem comentários (`//`, `/* */`).
+- Não inclua explicações, saudações, ou qualquer texto antes ou depois do
+  JSON, como "Aqui está a resposta em JSON:".
+- PROIBIDO delimitar o JSON com blocos de código markdown. Isso significa que
+  o primeiro caractere da sua resposta deve ser `{` e o último caractere deve
+  ser `}`. Nunca escreva ```json, ``` ou qualquer sequência de crases (`` ` ``)
+  em nenhuma parte da resposta.
+- Exemplo do que NÃO fazer (INCORRETO, contém crases e texto fora do JSON):
+  ```json
+  {"campo": "valor"}
+  ```
+- Exemplo do que fazer (CORRETO, apenas o objeto, sem nada antes ou depois):
+  {"campo": "valor"}
+- A resposta deve ser um JSON sintaticamente válido, capaz de ser processado
+  por `json.loads` sem nenhum tratamento adicional. Uma resposta fora desse
+  formato será tratada como erro de processamento por um sistema automatizado.
 """
 
 

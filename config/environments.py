@@ -49,3 +49,5 @@ class Environments:
         # Agents
         self.GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
         
+        # FAQ
+        self.FAQ_PDF_PATH = os.getenv("FAQ_PDF_PATH", "multi_agent/agents/data/faq.pdf")

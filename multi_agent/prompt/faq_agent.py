@@ -23,7 +23,24 @@ Se não encontrar uma resposta válida, diga que não sabe e tente fazer o usuá
 
 FORWARDING_PROTOCOL: str = """
 ## Protocolo de Encaminhamento
-Retorne apenas um objeto JSON com as chaves do estado abaixo. Não inclua texto fora do JSON.
+Você tem acesso à ferramenta retrieve_context, que busca os trechos mais
+relevantes no PDF interno do Zera. Siga sempre estes dois passos, nesta ordem,
+para CADA pergunta recebida:
+
+1. Chame retrieve_context com a pergunta do usuário. Nunca responda sem antes
+   consultá-la.
+2. Depois de receber o resultado da ferramenta, você OBRIGATORIAMENTE deve
+   gerar uma segunda mensagem — desta vez de texto puro, não outra chamada de
+   ferramenta — contendo sua resposta final. Chamar a ferramenta não é o fim
+   da sua tarefa: o turno só termina quando essa mensagem de texto final é
+   enviada. Nunca finalize sua participação apenas com a chamada da
+   ferramenta e sem essa mensagem final; isso é tratado como erro grave pelo
+   sistema.
+
+Essa mensagem de texto final deve conter exclusivamente um objeto JSON com as
+chaves abaixo. Não inclua texto fora do JSON, não divida a resposta em
+múltiplas partes e não anexe metadados, raciocínio ou qualquer conteúdo além
+do próprio objeto JSON.
 
 Trechos relevantes recuperados:
 {"answer": "<resposta_baseada_nos_trechos>", "sources": ["<id_do_trecho>"]}

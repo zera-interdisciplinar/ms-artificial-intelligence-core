@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 
 from langgraph.graph import StateGraph
 from langgraph.graph.state import CompiledStateGraph
+from pydantic import SecretStr
 
 from config.environments import Environments
 from logger.logger import logger
@@ -39,7 +40,7 @@ from .entity import AgentName
 
 from .agents.guardrail import Guardrail
 from .agents.orchestrator import orchestrator_fate_decision
-from .agents.faq import make_faq_func
+from .agents.faq import FAQ
 from .agents.report import make_report_func
 from .agents.formatter import make_formatter_func
 from .agents.judge import make_judge_func, judge_fate_decision
@@ -55,6 +56,7 @@ class MultiAgentService(IMultiAgentService):
     graph: StateGraph[State]
     __compiled_graph: Optional[CompiledStateGraph[State]] = None
     guardrail: Guardrail
+    faq: FAQ
 
     def __init__(self, repository: IMultiAgentRepository, envs: Environments, logger: logger):
         self.repository = repository
@@ -69,11 +71,12 @@ class MultiAgentService(IMultiAgentService):
 
         # initializes the model
         self.logger.Info("initializing the gemini llm")
+        api_key = SecretStr(self.envs.GEMINI_API_KEY) if self.envs.GEMINI_API_KEY else None
         llm_gemini = ChatGoogleGenerativeAI(
             model = "gemini-2.5-flash",
             temperature = 0.2,
             top_p = 0.9,
-            google_api_key = self.envs.GEMINI_API_KEY,
+            api_key = api_key,
         )
 
         # initializes the system agents
@@ -97,10 +100,15 @@ class MultiAgentService(IMultiAgentService):
             system_prompt=REPORT_AGENT_SYSTEM_PROMPT_FINAL,
         )
 
+        self.faq = FAQ(self.envs, self.logger)
+        self.faq.setup()
+
         faq_agent = create_agent(
             model=llm_gemini,
             system_prompt=FAQ_AGENT_SYSTEM_PROMPT_FINAL,
+            tools=[self.faq.make_retrieve_context_tool()],
         )
+        self.faq.faq_agent = faq_agent
 
         formatter_agent = create_agent(
             model=llm_gemini,
@@ -128,7 +136,7 @@ class MultiAgentService(IMultiAgentService):
         new_graph.add_node(AgentName.ORCHESTRATOR, orchestrator_agent)
         new_graph.add_node(AgentName.PREDICT_MODEL, predict_model_agent)
         new_graph.add_node(AgentName.REPORT_AGENT, make_report_func(report_agent))
-        new_graph.add_node(AgentName.FAQ_AGENT, make_faq_func(faq_agent))
+        new_graph.add_node(AgentName.FAQ_AGENT, self.faq.faq_func)
         new_graph.add_node(AgentName.FORMATTER_AGENT, make_formatter_func(formatter_agent))
         new_graph.add_node(AgentName.JUDGE_AGENT, make_judge_func(judge_agent))
         new_graph.add_node(AgentName.GUARDRAIL_OUT, self.guardrail.guardrail_out_func)
@@ -263,7 +271,7 @@ class MultiAgentService(IMultiAgentService):
         self.logger.Info(f"Finished processing message for user_id: {user_id}, thread_id: {thread_id}")
 
         return AgentResponse(
-            content = end_state["final_response"],
+            content = end_state["final_response"] or end_state["blocked_reason"] or "",
             blocked = end_state["blocked"],
             blocked_reason = end_state["blocked_reason"],
             agent_trace = end_state["called_agents"],

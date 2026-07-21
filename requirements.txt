@@ -6,6 +6,7 @@ uvicorn
 langgraph
 langchain
 langchain_google_genai
+langchain_community
 
 # Database
 pymongo
@@ -16,3 +17,7 @@ python-dotenv
 # Tests
 pytest
 pytest-cov
+
+# pdf --> FAISS
+faiss-cpu
+pypdf
