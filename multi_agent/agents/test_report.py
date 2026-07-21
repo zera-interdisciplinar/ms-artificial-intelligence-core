@@ -1,8 +1,10 @@
 import json
+from typing import cast
 from unittest.mock import MagicMock
 
 from langchain.messages import HumanMessage
 
+from multi_agent.entity import State
 from multi_agent.agents.report import make_report_func
 
 
@@ -24,7 +26,7 @@ class TestReportFunc:
         }
         report_func = make_report_func(report_agent)
 
-        result = report_func({"messages": [HumanMessage(content="gere o relatório do lote 45")]})
+        result = report_func(cast(State, {"messages": [HumanMessage(content="gere o relatório do lote 45")]}))
 
         assert result == {
             "report_header": "Relatório — Lote 45",

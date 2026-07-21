@@ -1,36 +1,37 @@
 import json
+from typing import cast
 from unittest.mock import MagicMock
 
 from langchain.messages import HumanMessage
 
-from multi_agent.entity import AgentName
+from multi_agent.entity import AgentName, State
 from multi_agent.agents.judge import MAX_JUDGE_ATTEMPTS, make_judge_func, judge_fate_decision
 
 
-def _state(**overrides):
+def _state(**overrides) -> State:
     state = {
         "messages": [HumanMessage(content="quais perfis existem?")],
         "formatted_response": "três perfis",
         "judge_attempts": 0,
     }
     state.update(overrides)
-    return state
+    return cast(State, state)
 
 
 class TestJudgeFateDecision:
     def test_routes_to_guardrail_out_when_approved(self):
-        state = {"approved": True, "judge_attempts": 1}
+        state = cast(State, {"approved": True, "judge_attempts": 1})
 
         assert judge_fate_decision(state) == AgentName.GUARDRAIL_OUT
 
     def test_routes_to_orchestrator_when_not_approved_and_attempts_remain(self):
-        state = {"approved": False, "judge_attempts": 1}
+        state = cast(State, {"approved": False, "judge_attempts": 1})
 
         assert judge_fate_decision(state) == AgentName.ORCHESTRATOR
         assert MAX_JUDGE_ATTEMPTS > 1
 
     def test_routes_to_guardrail_out_when_not_approved_and_attempts_exhausted(self):
-        state = {"approved": False, "judge_attempts": MAX_JUDGE_ATTEMPTS}
+        state = cast(State, {"approved": False, "judge_attempts": MAX_JUDGE_ATTEMPTS})
 
         assert judge_fate_decision(state) == AgentName.GUARDRAIL_OUT
 

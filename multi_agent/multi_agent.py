@@ -45,7 +45,7 @@ class IMultiAgentRepository(Protocol):
 
     def remove_thread(self, user_id: UUID, thread_id: UUID) -> None:
         """
-        Remove a thread and all its messages from the database for a given user and thread.
+        Remove all messages from a given user and thread from the collection.
         Raise RepositoryDeleteException if the removal fails.
         """
         ...

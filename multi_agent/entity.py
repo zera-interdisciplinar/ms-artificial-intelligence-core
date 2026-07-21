@@ -50,27 +50,6 @@ class Message(BaseModel):
     content: str
     agent: AgentName | None = None
     created_at: datetime
-
-class Thread(BaseModel):
-    """
-    Represents a thread in the multi-agent system. A thread is a collection of messages exchanged between the user and the multi-agent system.
-    """
-
-    user_id: UUID
-    thread_id: UUID
-    messages: list[Message] = []
-
-    def add_message(self, message: Message):
-        """
-        Adds a message to the thread.
-        """
-        self.messages.append(message)
-
-    def get_messages(self) -> list[Message]:
-        """
-        Returns the list of messages in the thread.
-        """
-        return self.messages
     
 class State(MessagesState):
     """

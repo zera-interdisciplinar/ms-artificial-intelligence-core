@@ -11,7 +11,6 @@ from multi_agent.entity import (
     Message,
     Role,
     State,
-    Thread,
 )
 
 
@@ -153,51 +152,12 @@ class TestMessage:
         assert Message.model_validate(dumped) == message
 
 
-class TestThread:
-    def test_starts_empty(self, user_id, thread_id):
-        thread = Thread(user_id=user_id, thread_id=thread_id)
-
-        assert thread.get_messages() == []
-
-    def test_messages_default_is_not_shared_between_instances(self, user_id, thread_id, message):
-        Thread(user_id=user_id, thread_id=thread_id).add_message(message)
-
-        assert Thread(user_id=user_id, thread_id=thread_id).get_messages() == []
-
-    def test_add_message_appends_in_order(self, user_id, thread_id, message):
-        answer = message.model_copy(update={"role": Role.ASSISTANT, "content": "três perfis"})
-        thread = Thread(user_id=user_id, thread_id=thread_id)
-
-        thread.add_message(message)
-        thread.add_message(answer)
-
-        assert thread.get_messages() == [message, answer]
-
-    def test_get_messages_reflects_later_additions(self, user_id, thread_id, message):
-        thread = Thread(user_id=user_id, thread_id=thread_id)
-        messages = thread.get_messages()
-
-        thread.add_message(message)
-
-        assert thread.get_messages() == [message]
-        assert messages is thread.messages
-
-    def test_accepts_messages_passed_to_the_constructor(self, user_id, thread_id, message):
-        thread = Thread(user_id=user_id, thread_id=thread_id, messages=[message])
-
-        assert thread.get_messages() == [message]
-
-    def test_rejects_a_non_message_entry(self, user_id, thread_id):
-        with pytest.raises(ValidationError):
-            Thread(user_id=user_id, thread_id=thread_id, messages=cast(Any, ["olá"]))
-
-
 class TestState:
     def test_is_a_typed_dict_carrying_the_graph_contract(self):
         state: State = {
             "messages": [],
             "called_agents": [AgentName.GUARDRAIL_IN],
-            "next_agent": "orchestrator",
+            "next_agent": AgentName.ORCHESTRATOR,
             "intent": "faq",
             "blocked": False,
             "blocked_reason": None,
@@ -210,6 +170,7 @@ class TestState:
             "formatted_response": None,
             "approved": True,
             "discrepancy": None,
+            "judge_attempts": 0,
             "final_response": "três perfis",
         }
 
