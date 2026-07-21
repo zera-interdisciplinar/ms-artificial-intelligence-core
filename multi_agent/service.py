@@ -39,7 +39,8 @@ from .entity import State
 from .entity import AgentName
 
 from .agents.guardrail import Guardrail
-from .agents.orchestrator import orchestrator_fate_decision
+from .agents.orchestrator import make_orchestrator_func, orchestrator_fate_decision
+from .agents.predict_model import make_predict_model_func
 from .agents.faq import FAQ
 from .agents.report import make_report_func
 from .agents.formatter import make_formatter_func
@@ -133,8 +134,8 @@ class MultiAgentService(IMultiAgentService):
         new_graph.set_entry_point(AgentName.GUARDRAIL_IN)
 
         new_graph.add_node(AgentName.GUARDRAIL_IN, self.guardrail.guardrail_in_func)
-        new_graph.add_node(AgentName.ORCHESTRATOR, orchestrator_agent)
-        new_graph.add_node(AgentName.PREDICT_MODEL, predict_model_agent)
+        new_graph.add_node(AgentName.ORCHESTRATOR, make_orchestrator_func(orchestrator_agent))
+        new_graph.add_node(AgentName.PREDICT_MODEL, make_predict_model_func(predict_model_agent))
         new_graph.add_node(AgentName.REPORT_AGENT, make_report_func(report_agent))
         new_graph.add_node(AgentName.FAQ_AGENT, self.faq.faq_func)
         new_graph.add_node(AgentName.FORMATTER_AGENT, make_formatter_func(formatter_agent))

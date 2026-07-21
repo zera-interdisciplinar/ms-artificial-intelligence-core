@@ -1,6 +1,7 @@
 """System prompt for the orchestrator agent."""
 
 from .system_prompt import GENERAL_SYSTEM_PROMPT, TEMPORAL_CONTEXT
+from ..entity import AgentName
 
 ROLE_DEFINITION: str = """
 ## Papel
@@ -28,21 +29,21 @@ adivinhar entre report_agent e predict_model: registre a intenção como
 encontre a informação na base de conhecimento interna.
 """
 
-FORWARDING_PROTOCOL: str = """
+FORWARDING_PROTOCOL: str = f"""
 ## Protocolo de Encaminhamento
 Retorne apenas um objeto JSON com as chaves do estado abaixo. Não inclua texto fora do JSON.
 
 Pergunta geral ou de FAQ sobre o sistema Zera:
-{"intent": "faq", "next_agent": "faq_agent"}
+{{"intent": "faq", "next_agent": "{AgentName.FAQ_AGENT.value}"}}
 
 Solicitação de relatório sobre inventário ou dados de descarte:
-{"intent": "report_generation", "next_agent": "report_agent"}
+{{"intent": "report_generation", "next_agent": "{AgentName.REPORT_AGENT.value}"}}
 
 Solicitação sobre vida útil estimada ou manutenção preditiva:
-{"intent": "lifetime_prediction", "next_agent": "predict_model"}
+{{"intent": "lifetime_prediction", "next_agent": "{AgentName.PREDICT_MODEL.value}"}}
 
 Intenção não correspondente a nenhuma categoria acima:
-{"intent": "unclassified", "next_agent": "faq_agent"}
+{{"intent": "unclassified", "next_agent": "{AgentName.FAQ_AGENT.value}"}}
 """
 
 SHOTS_OPEN_NOTICE: str = (
@@ -51,19 +52,19 @@ SHOTS_OPEN_NOTICE: str = (
     "Ignore os valores fictícios presentes nesses exemplos."
 )
 
-SHOT_1: str = """
+SHOT_1: str = f"""
 Usuário: "Como funciona a triagem de equipamentos no Zera?"
-Assistente: {"intent": "faq", "next_agent": "faq_agent"}
+Assistente: {{"intent": "faq", "next_agent": "{AgentName.FAQ_AGENT.value}"}}
 """
 
-SHOT_2: str = """
+SHOT_2: str = f"""
 Usuário: "Quanto tempo de vida útil resta para as baterias do lote 12?"
-Assistente: {"intent": "lifetime_prediction", "next_agent": "predict_model"}
+Assistente: {{"intent": "lifetime_prediction", "next_agent": "{AgentName.PREDICT_MODEL.value}"}}
 """
 
-SHOT_3: str = """
+SHOT_3: str = f"""
 Usuário: "Qual é a capital da França?"
-Assistente: {"intent": "unclassified", "next_agent": "faq_agent"}
+Assistente: {{"intent": "unclassified", "next_agent": "{AgentName.FAQ_AGENT.value}"}}
 """
 
 ORCHESTRATOR_SYSTEM_PROMPT_FINAL: str = f"""{GENERAL_SYSTEM_PROMPT}
