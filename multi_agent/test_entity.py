@@ -161,6 +161,7 @@ class TestState:
             "intent": "faq",
             "blocked": False,
             "blocked_reason": None,
+            "pii_map": {},
             "answer": "três perfis",
             "sources": ["zera_overview.pdf#p2"],
             "report_header": None,
@@ -185,6 +186,7 @@ class TestState:
             "intent",
             "blocked",
             "blocked_reason",
+            "pii_map",
             "answer",
             "sources",
             "report_header",
@@ -199,8 +201,21 @@ class TestState:
 
         assert expected <= set(State.__annotations__)
 
-    def test_called_agents_uses_an_additive_reducer(self):
-        """The reducer is what lets each node append its own name to the trace."""
-        import operator
+    def test_called_agents_uses_a_reset_or_add_reducer(self):
+        """The reducer lets each node append its own name to the trace within a run,
+        while an empty update (used between separate invocations) resets it instead
+        of accumulating forever."""
+        reducer = State.__annotations__["called_agents"].__metadata__[0]
 
-        assert operator.add in State.__annotations__["called_agents"].__metadata__
+        assert reducer([AgentName.ORCHESTRATOR], [AgentName.FAQ_AGENT]) == [
+            AgentName.ORCHESTRATOR,
+            AgentName.FAQ_AGENT,
+        ]
+        assert reducer([AgentName.ORCHESTRATOR], []) == []
+
+    def test_judge_attempts_uses_a_reset_or_add_reducer(self):
+        """Same reset-or-accumulate behavior as called_agents, but for the attempts counter."""
+        reducer = State.__annotations__["judge_attempts"].__metadata__[0]
+
+        assert reducer(1, 1) == 2
+        assert reducer(1, 0) == 0

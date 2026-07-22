@@ -4,7 +4,7 @@ from unittest.mock import MagicMock
 
 from langchain.messages import HumanMessage
 
-from multi_agent.entity import State
+from multi_agent.entity import AgentName, State
 from multi_agent.agents.formatter import make_formatter_func
 
 
@@ -20,7 +20,10 @@ class TestFormatterFunc:
 
         result = formatter_func(cast(State, {"messages": [HumanMessage(content="quais perfis existem?")]}))
 
-        assert result == {"formatted_response": "três perfis"}
+        assert result == {
+            "called_agents": [AgentName.FORMATTER_AGENT],
+            "formatted_response": "três perfis",
+        }
 
     def test_sends_the_faq_answer_and_sources_to_the_agent(self):
         formatter_agent = MagicMock()
