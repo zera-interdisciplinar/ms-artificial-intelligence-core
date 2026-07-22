@@ -4,7 +4,6 @@ Defines the classes for the multi-agent service and repository. The multi-agent 
 from typing import Annotated, Protocol, Any
 from uuid import UUID
 
-import operator
 from enum import Enum
 from datetime import datetime
 
@@ -12,6 +11,24 @@ from langgraph.graph import MessagesState
 from pydantic import BaseModel
 
 from langgraph.graph import START, END
+
+
+def _reset_or_add_list(existing: list, new: list) -> list:
+    """
+    Reducer for procedural fields in State, if a empty list is passed, it resets the field instead of accumulating. It will be used when we want to reset some data from the state, for example when we want to reset the called_agents list.
+    """
+    if not new:
+        return new
+    return existing + new
+
+
+def _reset_or_add_int(existing: int, new: int) -> int:
+    """
+    Reducer for procedural fields in State, if a zero is passed, it resets the field instead of accumulating. It will be used when we want to reset some data from the state, for example when we want to reset the judge_attempts counter.
+    """
+    if not new:
+        return new
+    return existing + new
 
 # enum for the role of the message sender
 class Role(str, Enum):
@@ -56,7 +73,7 @@ class State(MessagesState):
     Represents the state of the multi-agent system.
     """
 
-    called_agents: Annotated[list[AgentName], operator.add]
+    called_agents: Annotated[list[AgentName], _reset_or_add_list]
 
     # routing
     next_agent: AgentName | None  # an AgentName value
@@ -85,7 +102,7 @@ class State(MessagesState):
     # judge_agent
     approved: bool | None
     discrepancy: str | None
-    judge_attempts: Annotated[int, operator.add]
+    judge_attempts: Annotated[int, _reset_or_add_int]
 
     # guardrail_out
     final_response: str | None

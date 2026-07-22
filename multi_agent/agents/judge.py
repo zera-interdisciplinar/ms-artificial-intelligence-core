@@ -49,6 +49,7 @@ def make_judge_func(judge_agent):
         attempts_done = state.get("judge_attempts", 0) + 1 # this func is also a attempt, so we increment the attempts done by 1
 
         result: dict = {
+            "called_agents": [AgentName.JUDGE_AGENT],
             "approved": approved,
             "discrepancy": discrepancy,
             "judge_attempts": 1, # this is the first attempt, so we set it to 1. If there are more attempts, it will be incremented in the next call

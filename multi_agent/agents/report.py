@@ -1,4 +1,4 @@
-from ..entity import State
+from ..entity import State, AgentName
 from .message_utils import parse_json_message
 from logger.logger import logger
 
@@ -20,6 +20,7 @@ def make_report_func(report_agent):
         _logger.Debug(f"Report classification={classification}")
 
         return {
+            "called_agents": [AgentName.REPORT_AGENT],
             "report_header": classification["report_header"],
             "report_body": classification["report_body"],
             "report_footer": classification["report_footer"],

@@ -103,6 +103,7 @@ class Guardrail:
 
                 return {
                     "messages": [RemoveMessage(id=original_message_id), masked_message],
+                    "called_agents": [AgentName.GUARDRAIL_IN],
                     "blocked": classification["blocked"],
                     "blocked_reason": classification["blocked_reason"],
                     "pii_map": pii_map,
@@ -156,6 +157,7 @@ class Guardrail:
                 if classification["blocked"]:
                         self.logger.Warning(f"Guardrail out: response blocked for reason: {classification.get('blocked_reason')}")
                         return {
+                            "called_agents": [AgentName.GUARDRAIL_OUT],
                             "blocked": classification["blocked"],
                             "blocked_reason": classification["blocked_reason"],
                             "final_response": None,
@@ -166,6 +168,7 @@ class Guardrail:
                 self.logger.Info("Guardrail out: returning final response to user")
 
                 return {
+                    "called_agents": [AgentName.GUARDRAIL_OUT],
                     "blocked": classification["blocked"],
                     "blocked_reason": classification["blocked_reason"],
                     "final_response": final_response,

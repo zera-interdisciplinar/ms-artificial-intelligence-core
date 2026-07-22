@@ -1,4 +1,4 @@
-from ..entity import State
+from ..entity import State, AgentName
 from .message_utils import parse_json_message
 from logger.logger import logger
 
@@ -20,6 +20,7 @@ def make_predict_model_func(predict_model_agent):
         _logger.Debug(f"Predict model classification={classification}")
 
         return {
+            "called_agents": [AgentName.PREDICT_MODEL],
             "predictions": classification["predictions"],
         }
 

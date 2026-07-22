@@ -1,6 +1,6 @@
 import json
 
-from ..entity import State
+from ..entity import State, AgentName
 from .message_utils import parse_json_message
 from langchain.messages import HumanMessage
 from logger.logger import logger
@@ -39,6 +39,7 @@ def make_formatter_func(formatter_agent):
         _logger.Debug(f"Formatter formatted_response={formated_response}")
 
         return {
+            "called_agents": [AgentName.FORMATTER_AGENT],
             "formatted_response": formated_response["formatted_response"],
         }
 

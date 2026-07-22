@@ -10,7 +10,7 @@ from typing import Optional
 
 from config.environments import Environments
 
-from ..entity import State
+from ..entity import State, AgentName
 from .message_utils import parse_json_message
 from logger.logger import logger
 from pydantic import SecretStr
@@ -98,6 +98,7 @@ class FAQ:
         self.logger.Debug(f"FAQ formatted response={formated_response}")
 
         return {
+            "called_agents": [AgentName.FAQ_AGENT],
             "answer": formated_response["answer"],
             "sources": formated_response["sources"],
         }

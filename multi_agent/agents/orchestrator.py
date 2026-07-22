@@ -20,6 +20,7 @@ def make_orchestrator_func(orchestrator_agent):
         _logger.Debug(f"Orchestrator classification={classification}")
 
         return {
+            "called_agents": [AgentName.ORCHESTRATOR],
             "intent": classification["intent"],
             "next_agent": classification["next_agent"],
         }
