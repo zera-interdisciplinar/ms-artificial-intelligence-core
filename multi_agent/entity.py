@@ -65,6 +65,7 @@ class State(MessagesState):
     # guardrails
     blocked: bool
     blocked_reason: str | None
+    pii_map: dict[str, str]
 
     # faq_agent
     answer: str | None

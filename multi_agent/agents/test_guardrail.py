@@ -12,14 +12,6 @@ USER_ID = UUID("11111111-1111-1111-1111-111111111111")
 THREAD_ID = UUID("22222222-2222-2222-2222-222222222222")
 
 
-@pytest.fixture(autouse=True)
-def clear_pii_map():
-    """PII_MAP is a class attribute shared across instances; keep tests isolated."""
-    Guardrail.PII_MAP.clear()
-    yield
-    Guardrail.PII_MAP.clear()
-
-
 @pytest.fixture
 def guardrail():
     return Guardrail(
@@ -116,11 +108,11 @@ class TestGuardrailInFunc:
             "messages": [MagicMock(content=json.dumps({"blocked": False, "blocked_reason": None}))]
         }
 
-        guardrail.guardrail_in_func({"messages": [original_message]}, CONFIG)
+        result = guardrail.guardrail_in_func({"messages": [original_message]}, CONFIG)
 
         invoked_message = guardrail.guardrail_in_agent.invoke.call_args[0][0]["messages"][0]
         assert "joao@example.com" not in invoked_message.content
-        assert Guardrail.PII_MAP["<EMAIL_0>"] == "joao@example.com"
+        assert result["pii_map"]["<EMAIL_0>"] == "joao@example.com"
 
     def test_saves_the_masked_message_after_classification_succeeds(self, guardrail):
         original_message = HumanMessage(content="contato joao@example.com", id="msg-3")
@@ -155,33 +147,40 @@ class TestGuardrailOutFunc:
         assert result["final_response"] is None
 
     def test_restores_pii_in_the_final_response(self, guardrail):
-        Guardrail.PII_MAP["<EMAIL_0>"] = "joao@example.com"
         guardrail.guardrail_out_agent.invoke.return_value = {
             "messages": [MagicMock(content=json.dumps({"blocked": False, "blocked_reason": None}))]
         }
 
-        result = guardrail.guardrail_out_func({"formatted_response": "contato <EMAIL_0>"})
+        result = guardrail.guardrail_out_func(
+            {"formatted_response": "contato <EMAIL_0>", "pii_map": {"<EMAIL_0>": "joao@example.com"}}
+        )
 
         assert result["blocked"] is False
         assert result["final_response"] == "contato joao@example.com"
 
 
-class TestPiiMapIsSharedBetweenInstances:
-    def test_pii_map_is_a_class_level_attribute(self):
-        """Documents current behavior: PII_MAP is shared across Guardrail instances."""
-        first = Guardrail(
-            guardrail_in_agent=MagicMock(),
-            guardrail_out_agent=MagicMock(),
-            repository=MagicMock(),
-            logger=MagicMock(),
+class TestPiiMapIsRequestScoped:
+    def test_concurrent_requests_do_not_leak_pii_across_each_other(self, guardrail):
+        """pii_map now travels via State (per-invocation), not a shared class attribute."""
+        message_a = HumanMessage(content="contato joao@example.com", id="msg-a")
+        message_b = HumanMessage(content="contato maria@example.com", id="msg-b")
+        guardrail.guardrail_in_agent.invoke.return_value = {
+            "messages": [MagicMock(content=json.dumps({"blocked": False, "blocked_reason": None}))]
+        }
+
+        result_a = guardrail.guardrail_in_func({"messages": [message_a]}, CONFIG)
+        result_b = guardrail.guardrail_in_func({"messages": [message_b]}, CONFIG)
+
+        guardrail.guardrail_out_agent.invoke.return_value = {
+            "messages": [MagicMock(content=json.dumps({"blocked": False, "blocked_reason": None}))]
+        }
+
+        out_a = guardrail.guardrail_out_func(
+            {"formatted_response": "contato <EMAIL_0>", "pii_map": result_a["pii_map"]}
         )
-        second = Guardrail(
-            guardrail_in_agent=MagicMock(),
-            guardrail_out_agent=MagicMock(),
-            repository=MagicMock(),
-            logger=MagicMock(),
+        out_b = guardrail.guardrail_out_func(
+            {"formatted_response": "contato <EMAIL_0>", "pii_map": result_b["pii_map"]}
         )
 
-        first.PII_MAP["<EMAIL_0>"] = "joao@example.com"
-
-        assert second.PII_MAP["<EMAIL_0>"] == "joao@example.com"
+        assert out_a["final_response"] == "contato joao@example.com"
+        assert out_b["final_response"] == "contato maria@example.com"

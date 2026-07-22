@@ -43,8 +43,6 @@ class Guardrail:
         Class that holds the guardrail_in and guardrail_out agents and the functions that use them.
         """
         
-        PII_MAP = dict()  # a dictionary that maps the masked PII to the original PII
-
         def __init__(self, guardrail_in_agent, guardrail_out_agent, repository: IMultiAgentRepository, logger: logger):
                 self.guardrail_in_agent = guardrail_in_agent
                 self.guardrail_out_agent = guardrail_out_agent
@@ -72,8 +70,6 @@ class Guardrail:
 
                 self.logger.Info(f"Guardrail in: detected {len(pii_map)} PII items")
                 self.logger.Debug(f"Guardrail in: pii_map={json.dumps(pii_map)}")
-
-                self.PII_MAP.update(pii_map)
 
                 masked_message = HumanMessage(content=anonimized_input)
 
@@ -109,6 +105,7 @@ class Guardrail:
                     "messages": [RemoveMessage(id=original_message_id), masked_message],
                     "blocked": classification["blocked"],
                     "blocked_reason": classification["blocked_reason"],
+                    "pii_map": pii_map,
                 }
 
         def _remove_pii_from_text(self, text) -> tuple[str, dict]:
@@ -164,7 +161,7 @@ class Guardrail:
                             "final_response": None,
                         }
 
-                final_response = self._retreive_pii_from_text(formatted_response, self.PII_MAP)
+                final_response = self._retreive_pii_from_text(formatted_response, state.get("pii_map", {}))
                 self.logger.Debug(f"Guardrail out: final_response preview={final_response[:200]}")
                 self.logger.Info("Guardrail out: returning final response to user")
 
