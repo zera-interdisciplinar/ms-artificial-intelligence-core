@@ -24,7 +24,7 @@ spec:
         image: us-central1-docker.pkg.dev/zera1405/repo/ms-artificial-intelligence-core:IMAGE_TAG
         imagePullPolicy: Always
         ports:
-        - containerPort: 8080
+        - containerPort: 8000
         resources:
           requests:
             memory: "256Mi"
@@ -35,14 +35,14 @@ spec:
         livenessProbe:
           httpGet:
             path: /health
-            port: 8080
+            port: 8000
           initialDelaySeconds: 15
           periodSeconds: 20
           failureThreshold: 3
         readinessProbe:
           httpGet:
             path: /health
-            port: 8080
+            port: 8000
           initialDelaySeconds: 5
           periodSeconds: 10
           failureThreshold: 3
