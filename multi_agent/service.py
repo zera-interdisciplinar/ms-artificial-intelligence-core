@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 
 from langgraph.graph import StateGraph
 from langgraph.graph.state import CompiledStateGraph
+from langchain_core.language_models.chat_models import BaseChatModel
 from pydantic import SecretStr
 
 from config.environments import Environments
@@ -46,6 +47,8 @@ from .agents.report import make_report_func
 from .agents.formatter import make_formatter_func
 from .agents.judge import make_judge_func, judge_fate_decision
 
+from langchain_groq import ChatGroq
+
 # exceptions
 from .exception import MultiAgentServiceNotSetupException
 
@@ -80,24 +83,34 @@ class MultiAgentService(IMultiAgentService):
             api_key = api_key,
         )
 
+        # uses groq as fallback if gemini is not available
+        llm_groq = ChatGroq(
+            model="llama-3.3-70b-versatile",
+            temperature=0.2,
+            api_key=SecretStr(self.envs.GROQ_API_KEY) if self.envs.GROQ_API_KEY else None,
+        )
+        
+        # we just use cast here to hide the type error, but in run time this should not be a problem
+        llm = cast(BaseChatModel, llm_gemini.with_fallbacks([llm_groq]))
+
         # initializes the system agents
         guardrail_in_agent = create_agent(
-            model=llm_gemini,
+            model=llm,
             system_prompt=GUARDRAIL_IN_SYSTEM_PROMPT_FINAL,
         )
 
         orchestrator_agent = create_agent(
-            model=llm_gemini,
+            model=llm,
             system_prompt=ORCHESTRATOR_SYSTEM_PROMPT_FINAL,
         )
 
         predict_model_agent = create_agent(
-            model=llm_gemini,
+            model=llm,
             system_prompt=PREDICT_MODEL_SYSTEM_PROMPT_FINAL,
         )
 
         report_agent = create_agent(
-            model=llm_gemini,
+            model=llm,
             system_prompt=REPORT_AGENT_SYSTEM_PROMPT_FINAL,
         )
 
@@ -105,24 +118,24 @@ class MultiAgentService(IMultiAgentService):
         self.faq.setup()
 
         faq_agent = create_agent(
-            model=llm_gemini,
+            model=llm,
             system_prompt=FAQ_AGENT_SYSTEM_PROMPT_FINAL,
             tools=[self.faq.make_retrieve_context_tool()],
         )
         self.faq.faq_agent = faq_agent
 
         formatter_agent = create_agent(
-            model=llm_gemini,
+            model=llm,
             system_prompt=FORMATTER_AGENT_SYSTEM_PROMPT_FINAL,
         )
 
         judge_agent = create_agent(
-            model=llm_gemini,
+            model=llm,
             system_prompt=JUDGE_AGENT_SYSTEM_PROMPT_FINAL,
         )
 
         guardrail_out_agent = create_agent(
-            model=llm_gemini,
+            model=llm,
             system_prompt=GUARDRAIL_OUT_SYSTEM_PROMPT_FINAL,
         )
 

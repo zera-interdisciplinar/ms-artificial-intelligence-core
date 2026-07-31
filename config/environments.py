@@ -25,6 +25,7 @@ class Environments:
         
         # APIs
         self.GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+        self.GROQ_API_KEY = os.getenv("GROQ_API_KEY")
         
         # Database
         self.MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")

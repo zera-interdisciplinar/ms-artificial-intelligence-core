@@ -76,9 +76,10 @@ class TestSetup:
     @patch("multi_agent.service.StateGraph")
     @patch("multi_agent.service.MemorySaver")
     @patch("multi_agent.service.create_agent")
+    @patch("multi_agent.service.ChatGroq")
     @patch("multi_agent.service.ChatGoogleGenerativeAI")
     def test_builds_the_guardrail_and_compiles_the_graph(
-        self, mock_llm, mock_create_agent, mock_memory_saver, mock_state_graph, mock_faq, service
+        self, mock_llm, mock_groq_llm, mock_create_agent, mock_memory_saver, mock_state_graph, mock_faq, service
     ):
         mock_create_agent.side_effect = lambda **kwargs: MagicMock()
         mock_memory_saver.return_value = InMemorySaver()
