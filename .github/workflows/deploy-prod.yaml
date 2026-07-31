@@ -50,6 +50,7 @@ jobs:
       - name: Deploy to GKE
         run: |
           sed -i "s|IMAGE_TAG|${{ github.ref_name }}|g" k8s/deployment.yaml
+          kubectl apply -f k8s/mongodb.yaml -n production
           kubectl apply -f k8s/deployment.yaml -n production
           kubectl apply -f k8s/service.yaml -n production
           kubectl rollout status deployment/ms-artificial-intelligence-core -n production --timeout=120s
