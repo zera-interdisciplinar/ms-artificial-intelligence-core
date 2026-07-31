@@ -78,3 +78,8 @@ spec:
             secretKeyRef:
               name: ms-artificial-intelligence-core-secrets
               key: GROQ_API_KEY
+        - name: GEMINI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: ms-artificial-intelligence-core-secrets
+              key: GEMINI_API_KEY
