@@ -47,13 +47,34 @@ spec:
           periodSeconds: 10
           failureThreshold: 3
         env:
-        - name: OPENAI_API_KEY
-          valueFrom:
-            secretKeyRef:
-              name: app-secrets
-              key: OPENAI_API_KEY
+        - name: APP_ENV
+          value: "production"
+        - name: APP_PORT
+          value: "8000"
+        - name: APP_HOST
+          value: "0.0.0.0"
         - name: MONGO_URI
           valueFrom:
             secretKeyRef:
-              name: app-secrets
+              name: ms-artificial-intelligence-core-secrets
               key: MONGO_URI
+        - name: MONGO_DB_NAME
+          valueFrom:
+            secretKeyRef:
+              name: ms-artificial-intelligence-core-secrets
+              key: MONGO_DB_NAME
+        - name: MONGO_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: ms-artificial-intelligence-core-secrets
+              key: MONGO_USERNAME
+        - name: MONGO_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: ms-artificial-intelligence-core-secrets
+              key: MONGO_PASSWORD
+        - name: GROQ_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: ms-artificial-intelligence-core-secrets
+              key: GROQ_API_KEY
