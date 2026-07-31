@@ -28,7 +28,11 @@ class RouterAPI:
         BuildAPI is a method that sets up the API endpoints and their corresponding logic. It initializes the necessary components and prepares the API for handling requests.
         """
         self._app = FastAPI()
-        
+
+        @self._app.get("/health", tags=["health"])
+        async def health_check():
+            return {"status": "ok"}
+
         group_v1 = APIRouter(prefix="/api/v1", tags=["v1"])
         
         multi_agent_router = multi_agent_handlers(multi_agent_service)
