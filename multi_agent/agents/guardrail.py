@@ -107,6 +107,7 @@ class Guardrail:
                     "blocked": classification["blocked"],
                     "blocked_reason": classification["blocked_reason"],
                     "pii_map": pii_map,
+                    "current_request": anonimized_input,
                 }
 
         def _remove_pii_from_text(self, text) -> tuple[str, dict]:

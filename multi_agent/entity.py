@@ -73,7 +73,9 @@ class State(MessagesState):
     Represents the state of the multi-agent system.
     """
 
+    # general
     called_agents: Annotated[list[AgentName], _reset_or_add_list]
+    current_request: str | None
 
     # routing
     next_agent: AgentName | None  # an AgentName value

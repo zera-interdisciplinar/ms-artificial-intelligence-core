@@ -11,6 +11,7 @@ from multi_agent.agents.judge import MAX_JUDGE_ATTEMPTS, make_judge_func, judge_
 def _state(**overrides) -> State:
     state = {
         "messages": [HumanMessage(content="quais perfis existem?")],
+        "current_request": "quais perfis existem?",
         "formatted_response": "três perfis",
         "judge_attempts": 0,
     }

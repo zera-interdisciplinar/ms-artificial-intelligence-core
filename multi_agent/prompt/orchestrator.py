@@ -25,8 +25,9 @@ responsabilidade dos agentes especializados.
 
 Se a intenção não corresponder a nenhuma das três categorias suportadas, não tente
 adivinhar entre report_agent e predict_model: registre a intenção como
-"unclassified" e encaminhe para faq_agent, que informará ao usuário caso não
-encontre a informação na base de conhecimento interna.
+"unclassified" e encerre o fluxo, encaminhando para END. Não force o
+encaminhamento para faq_agent quando não for possível extrair uma intenção de
+roteamento clara da solicitação do usuário.
 """
 
 FORWARDING_PROTOCOL: str = f"""
@@ -43,7 +44,7 @@ Solicitação sobre vida útil estimada ou manutenção preditiva:
 {{"intent": "lifetime_prediction", "next_agent": "{AgentName.PREDICT_MODEL.value}"}}
 
 Intenção não correspondente a nenhuma categoria acima:
-{{"intent": "unclassified", "next_agent": "{AgentName.FAQ_AGENT.value}"}}
+{{"intent": "unclassified", "next_agent": "{AgentName.END.value}"}}
 """
 
 SHOTS_OPEN_NOTICE: str = (
@@ -64,7 +65,7 @@ Assistente: {{"intent": "lifetime_prediction", "next_agent": "{AgentName.PREDICT
 
 SHOT_3: str = f"""
 Usuário: "Qual é a capital da França?"
-Assistente: {{"intent": "unclassified", "next_agent": "{AgentName.FAQ_AGENT.value}"}}
+Assistente: {{"intent": "unclassified", "next_agent": "{AgentName.END.value}"}}
 """
 
 ORCHESTRATOR_SYSTEM_PROMPT_FINAL: str = f"""{GENERAL_SYSTEM_PROMPT}
