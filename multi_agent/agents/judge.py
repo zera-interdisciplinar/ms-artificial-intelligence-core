@@ -21,7 +21,7 @@ def make_judge_func(judge_agent):
     """
 
     def judge_func(state: State) -> dict:
-        request = state["messages"][0].content
+        request = state["current_request"]
         _logger.Debug(f"Judge: request preview={request}")
 
         response = judge_agent.invoke(
@@ -71,7 +71,7 @@ def make_judge_func(judge_agent):
                     "predictions": [],
                     "formatted_response": None,
                     "messages": [
-                        HumanMessage(
+                        SystemMessage(
                             content=(
                                 "A resposta anterior foi reprovada pelo judge_agent pelo "
                                 f"seguinte motivo: {discrepancy}. Corrija esse ponto na nova tentativa."

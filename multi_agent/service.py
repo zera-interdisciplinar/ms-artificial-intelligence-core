@@ -77,7 +77,7 @@ class MultiAgentService(IMultiAgentService):
         self.logger.Info("initializing the gemini llm")
         api_key = SecretStr(self.envs.GEMINI_API_KEY) if self.envs.GEMINI_API_KEY else None
         llm_gemini = ChatGoogleGenerativeAI(
-            model = "gemini-2.5-flash",
+            model = "gemini-3.5-flash",
             temperature = 0.2,
             top_p = 0.9,
             api_key = api_key,
@@ -92,15 +92,22 @@ class MultiAgentService(IMultiAgentService):
         
         # we just use cast here to hide the type error, but in run time this should not be a problem
         llm = cast(BaseChatModel, llm_gemini.with_fallbacks([llm_groq]))
+        
+        llm_fast = ChatGoogleGenerativeAI(
+            model = "gemini-3.1-flash-lite",
+            temperature = 0.2,
+            top_p = 0.9,
+            api_key = api_key,
+        )
 
         # initializes the system agents
         guardrail_in_agent = create_agent(
-            model=llm,
+            model=llm_fast,
             system_prompt=GUARDRAIL_IN_SYSTEM_PROMPT_FINAL,
         )
 
         orchestrator_agent = create_agent(
-            model=llm,
+            model=llm_fast,
             system_prompt=ORCHESTRATOR_SYSTEM_PROMPT_FINAL,
         )
 
@@ -125,17 +132,17 @@ class MultiAgentService(IMultiAgentService):
         self.faq.faq_agent = faq_agent
 
         formatter_agent = create_agent(
-            model=llm,
+            model=llm_fast,
             system_prompt=FORMATTER_AGENT_SYSTEM_PROMPT_FINAL,
         )
 
         judge_agent = create_agent(
-            model=llm,
+            model=llm_fast,
             system_prompt=JUDGE_AGENT_SYSTEM_PROMPT_FINAL,
         )
 
         guardrail_out_agent = create_agent(
-            model=llm,
+            model=llm_fast,
             system_prompt=GUARDRAIL_OUT_SYSTEM_PROMPT_FINAL,
         )
 
@@ -173,6 +180,7 @@ class MultiAgentService(IMultiAgentService):
                 AgentName.PREDICT_MODEL: AgentName.PREDICT_MODEL,
                 AgentName.REPORT_AGENT: AgentName.REPORT_AGENT,
                 AgentName.FAQ_AGENT: AgentName.FAQ_AGENT,
+                AgentName.END: AgentName.END,
             }
         )
 
@@ -221,6 +229,7 @@ class MultiAgentService(IMultiAgentService):
                 # guardrails
                 "blocked": False,
                 "blocked_reason": None,
+                "current_request": None,
 
                 # faq_agent
                 "answer": None,
