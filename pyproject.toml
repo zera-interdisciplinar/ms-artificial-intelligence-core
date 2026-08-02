@@ -1,0 +1,10 @@
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["_internal", "app", "config", "logger", "multi_agent", "repository"]
+
+[tool.coverage.run]
+omit = [
+    "zera-ai-core/*",
+    "*/test_*.py",
+    "conftest.py",
+]

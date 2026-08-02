@@ -24,7 +24,7 @@ spec:
         image: us-central1-docker.pkg.dev/zera1405/repo/ms-artificial-intelligence-core:IMAGE_TAG
         imagePullPolicy: Always
         ports:
-        - containerPort: 8080
+        - containerPort: 8000
         resources:
           requests:
             memory: "256Mi"
@@ -35,25 +35,51 @@ spec:
         livenessProbe:
           httpGet:
             path: /health
-            port: 8080
+            port: 8000
           initialDelaySeconds: 15
           periodSeconds: 20
           failureThreshold: 3
         readinessProbe:
           httpGet:
             path: /health
-            port: 8080
+            port: 8000
           initialDelaySeconds: 5
           periodSeconds: 10
           failureThreshold: 3
         env:
-        - name: OPENAI_API_KEY
-          valueFrom:
-            secretKeyRef:
-              name: app-secrets
-              key: OPENAI_API_KEY
+        - name: APP_ENV
+          value: "production"
+        - name: APP_PORT
+          value: "8000"
+        - name: APP_HOST
+          value: "0.0.0.0"
         - name: MONGO_URI
           valueFrom:
             secretKeyRef:
-              name: app-secrets
+              name: ms-artificial-intelligence-core-secrets
               key: MONGO_URI
+        - name: MONGO_DB_NAME
+          valueFrom:
+            secretKeyRef:
+              name: ms-artificial-intelligence-core-secrets
+              key: MONGO_DB_NAME
+        - name: MONGO_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: ms-artificial-intelligence-core-secrets
+              key: MONGO_USERNAME
+        - name: MONGO_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: ms-artificial-intelligence-core-secrets
+              key: MONGO_PASSWORD
+        - name: GROQ_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: ms-artificial-intelligence-core-secrets
+              key: GROQ_API_KEY
+        - name: GEMINI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: ms-artificial-intelligence-core-secrets
+              key: GEMINI_API_KEY

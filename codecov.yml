@@ -1,0 +1,11 @@
+coverage:
+  status:
+    # Cobertura do projeto inteiro.
+    project:
+      default:
+        target: 80%
+        threshold: 1%
+    # Cobertura apenas das linhas alteradas no PR ("diff hit").
+    patch:
+      default:
+        target: 80%

@@ -47,6 +47,7 @@ jobs:
       - name: Deploy to GKE
         run: |
           sed -i "s|IMAGE_TAG|qa-${{ github.sha }}|g" k8s/deployment-qa.yaml
+          kubectl apply -f k8s/mongodb-qa.yaml -n qa
           kubectl apply -f k8s/deployment-qa.yaml -n qa
           kubectl apply -f k8s/service-qa.yaml -n qa
           kubectl rollout status deployment/ms-artificial-intelligence-core -n qa --timeout=120s

@@ -2,6 +2,13 @@
 fastapi
 uvicorn
 
+# Agents
+langgraph
+langchain
+langchain_google_genai
+langchain_community
+langchain_groq
+
 # Database
 pymongo
 
@@ -11,3 +18,7 @@ python-dotenv
 # Tests
 pytest
 pytest-cov
+
+# pdf --> FAISS
+faiss-cpu
+pypdf
