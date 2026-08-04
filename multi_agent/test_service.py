@@ -24,7 +24,11 @@ def envs() -> Any:
 @pytest.fixture
 def service(envs: Any) -> MultiAgentService:
     return MultiAgentService(
-        repository=cast(Any, MagicMock()), envs=envs, logger=cast(Any, MagicMock())
+        repository=cast(Any, MagicMock()),
+        envs=envs,
+        logger=cast(Any, MagicMock()),
+        pdf_renderer=cast(Any, MagicMock()),
+        storage_service=cast(Any, MagicMock()),
     )
 
 
@@ -40,6 +44,7 @@ class TestProcessMessage:
             "blocked": False,
             "blocked_reason": None,
             "called_agents": [AgentName.GUARDRAIL_IN, AgentName.ORCHESTRATOR],
+            "report_html": None,
         }
         service._MultiAgentService__compiled_graph = compiled_graph
 
@@ -59,6 +64,7 @@ class TestProcessMessage:
             "blocked": True,
             "blocked_reason": "conteúdo sensível",
             "called_agents": [],
+            "report_html": None,
         }
         service._MultiAgentService__compiled_graph = compiled_graph
 

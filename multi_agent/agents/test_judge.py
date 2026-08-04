@@ -81,7 +81,7 @@ class TestJudgeFunc:
         assert result["formatted_response"] is None
         assert result["answer"] is None
         assert result["sources"] == []
-        assert result["report_header"] is None
+        assert result["report_html"] is None
         assert result["predictions"] == []
         assert result["next_agent"] is None
         assert len(result["messages"]) == 1

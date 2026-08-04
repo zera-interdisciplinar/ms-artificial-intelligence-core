@@ -22,3 +22,7 @@ pytest-cov
 # pdf --> FAISS
 faiss-cpu
 pypdf
+
+# supabase storage (to save and load files)
+supabase
+weasyprint

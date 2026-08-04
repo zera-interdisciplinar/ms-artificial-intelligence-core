@@ -41,9 +41,7 @@ class TestFormatterFunc:
                     "messages": [HumanMessage(content="quais perfis existem?")],
                     "answer": "três perfis",
                     "sources": ["zera_overview.pdf#p2"],
-                    "report_header": None,
-                    "report_body": None,
-                    "report_footer": None,
+                    "report_html": None,
                     "predictions": [],
                 },
             )

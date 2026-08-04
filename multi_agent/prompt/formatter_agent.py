@@ -10,7 +10,7 @@ durante o fluxo pelo agente anterior (faq_agent, report_agent ou predict_model) 
 constrói a resposta final de forma organizada e padronizada.
 
 Organize o conteúdo de acordo com a estrutura apropriada ao agente de origem:
-resposta direta para faq_agent, header/body/footer para report_agent, estimativas
+resposta direta para faq_agent, HTML do relatório para report_agent, estimativas
 por item para predict_model. Remova artefatos internos não destinados ao usuário
 final, como marcadores internos, metadados de chamadas de ferramenta e pontuações
 de recuperação. Não adicione conteúdo factual, números ou alegações que não
@@ -49,7 +49,7 @@ Assistente: {"formatted_response": "Notebook: vida útil estimada de 8 meses.\\n
 """
 
 SHOT_3: str = """
-Usuário (estado de report_agent): {"report_header": "Relatório de Descarte — Lote 45", "report_body": "O Lote 45 contém 12 notebooks classificados como descartáveis.", "report_footer": "Relatório gerado a partir dos dados de inventário registrados no sistema Zera."}
+Usuário (estado de report_agent): {"report_html": "<!DOCTYPE html><html lang=\\"pt-BR\\"><head><meta charset=\\"utf-8\\" /><title>Relatório</title></head><body><header><h1>Relatório de Descarte — Lote 45</h1></header><main><p>O Lote 45 contém 12 notebooks classificados como descartáveis.</p></main><footer><p>Relatório gerado a partir dos dados de inventário registrados no sistema Zera.</p></footer></body></html>"}
 Assistente: {"formatted_response": "Relatório de Descarte — Lote 45\\n\\nO Lote 45 contém 12 notebooks classificados como descartáveis.\\n\\nRelatório gerado a partir dos dados de inventário registrados no sistema Zera."}
 """
 

@@ -65,9 +65,7 @@ def make_judge_func(judge_agent):
                     "intent": None,
                     "answer": None,
                     "sources": [],
-                    "report_header": None,
-                    "report_body": None,
-                    "report_footer": None,
+                    "report_html": None,
                     "predictions": [],
                     "formatted_response": None,
                     "messages": [

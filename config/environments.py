@@ -35,3 +35,8 @@ class Environments:
         
         # FAQ
         self.FAQ_PDF_PATH = os.getenv("FAQ_PDF_PATH", "multi_agent/agents/data/faq.pdf")
+
+        # Supabase Storage
+        self.SUPABASE_URL = os.getenv("SUPABASE_URL")
+        self.SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+        self.SUPABASE_BUCKET_NAME = os.getenv("SUPABASE_BUCKET_NAME")

@@ -20,9 +20,7 @@ def make_formatter_func(formatter_agent):
             for key in (
                 "answer",
                 "sources",
-                "report_header",
-                "report_body",
-                "report_footer",
+                "report_html",
                 "predictions",
             )
             if state.get(key) not in (None, [], "")
