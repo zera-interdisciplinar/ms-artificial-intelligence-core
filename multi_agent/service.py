@@ -19,6 +19,7 @@ from logger.logger import logger
 # storage
 from _internal.storage.storage import IStorageService
 from _internal.storage.pdf import PdfRenderer
+from _internal.storage.exceptions import StorageServiceException
 
 # completed prompts
 from .prompt.guardrail_in import GUARDRAIL_IN_SYSTEM_PROMPT_FINAL
@@ -302,13 +303,16 @@ class MultiAgentService(IMultiAgentService):
 
         if end_state["report_html"] is not None and AgentName.REPORT_AGENT in end_state["called_agents"]:
             self.logger.Info(f"Saving report for user_id: {user_id}, thread_id: {thread_id}")
-            pdf_bytes = self.pdf_renderer.render(end_state["report_html"])
-            report_url = self.storage_service.upload(
-                content=pdf_bytes,
-                filename=f"{uuid4()}.pdf",
-                content_type="application/pdf",
-            )
-            
+            try:
+                pdf_bytes = self.pdf_renderer.render(end_state["report_html"])
+                report_url = self.storage_service.upload(
+                    content=pdf_bytes,
+                    filename=f"{uuid4()}.pdf",
+                    content_type="application/pdf",
+                )
+            except StorageServiceException as e:
+                self.logger.Error(f"Failed to save report for user_id: {user_id}, thread_id: {thread_id}", e)
+
             # TODO: we should save the report_url to the database, but we need to think more about how to do it and how to integrate with ms-inventory. For now, we just return the report_url to the caller, and they can decide what to do with it.
 
 

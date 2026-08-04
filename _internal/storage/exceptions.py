@@ -9,3 +9,7 @@ class PDFRenderException(StorageServiceException):
 class StorageUploadException(StorageServiceException):
     """Exception raised when a file fails to be uploaded to the storage provider."""
     pass
+
+class StorageConfigurationException(StorageServiceException):
+    """Exception raised when required storage configuration (env vars) is missing."""
+    pass

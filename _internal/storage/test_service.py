@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from .exceptions import StorageUploadException
+from .exceptions import StorageConfigurationException, StorageUploadException
 from .service import SupabaseStorageService
 
 
@@ -28,6 +28,19 @@ class TestInit:
         service = SupabaseStorageService(envs)
 
         assert service.bucket_name == "zera-reports"
+
+    @pytest.mark.parametrize(
+        "missing_env",
+        ["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "SUPABASE_BUCKET_NAME"],
+    )
+    @patch("_internal.storage.service.create_client")
+    def test_raises_when_a_required_env_var_is_missing(self, mock_create_client, envs, missing_env):
+        setattr(envs, missing_env, None)
+
+        with pytest.raises(StorageConfigurationException):
+            SupabaseStorageService(envs)
+
+        mock_create_client.assert_not_called()
 
 
 class TestUpload:

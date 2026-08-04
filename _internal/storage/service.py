@@ -2,7 +2,7 @@ from supabase import create_client, Client
 
 from config.environments import Environments
 from .storage import IStorageService
-from .exceptions import StorageUploadException
+from .exceptions import StorageConfigurationException, StorageUploadException
 
 
 class SupabaseStorageService(IStorageService):
@@ -11,6 +11,11 @@ class SupabaseStorageService(IStorageService):
     client: Client
 
     def __init__(self, envs: Environments):
+        if not envs.SUPABASE_URL or not envs.SUPABASE_SERVICE_ROLE_KEY or not envs.SUPABASE_BUCKET_NAME:
+            raise StorageConfigurationException(
+                "SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY and SUPABASE_BUCKET_NAME must all be set to use SupabaseStorageService."
+            )
+
         self.client = create_client(envs.SUPABASE_URL, envs.SUPABASE_SERVICE_ROLE_KEY)
         self.bucket_name = envs.SUPABASE_BUCKET_NAME
 
