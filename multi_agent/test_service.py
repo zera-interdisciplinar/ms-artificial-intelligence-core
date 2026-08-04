@@ -76,6 +76,45 @@ class TestProcessMessage:
             "thread_id": THREAD_ID,
         }
 
+    def test_renders_and_uploads_the_report_when_report_agent_was_called(self, service):
+        compiled_graph = MagicMock()
+        compiled_graph.invoke.return_value = {
+            "final_response": "aqui está o relatório",
+            "blocked": False,
+            "blocked_reason": None,
+            "called_agents": [AgentName.GUARDRAIL_IN, AgentName.REPORT_AGENT],
+            "report_html": "<html><body>relatório</body></html>",
+        }
+        service._MultiAgentService__compiled_graph = compiled_graph
+        service.pdf_renderer.render.return_value = b"%PDF-1.7"
+        service.storage_service.upload.return_value = "https://xxxxx.supabase.co/storage/v1/object/public/zera-reports/report.pdf"
+
+        response = service.process_message("gere o relatório", USER_ID, THREAD_ID)
+
+        service.pdf_renderer.render.assert_called_once_with("<html><body>relatório</body></html>")
+        _, upload_kwargs = service.storage_service.upload.call_args
+        assert upload_kwargs["content"] == b"%PDF-1.7"
+        assert upload_kwargs["filename"].endswith(".pdf")
+        assert upload_kwargs["content_type"] == "application/pdf"
+        assert response.report_url == "https://xxxxx.supabase.co/storage/v1/object/public/zera-reports/report.pdf"
+
+    def test_does_not_render_or_upload_when_report_agent_was_not_called(self, service):
+        compiled_graph = MagicMock()
+        compiled_graph.invoke.return_value = {
+            "final_response": "três perfis",
+            "blocked": False,
+            "blocked_reason": None,
+            "called_agents": [AgentName.GUARDRAIL_IN, AgentName.ORCHESTRATOR],
+            "report_html": None,
+        }
+        service._MultiAgentService__compiled_graph = compiled_graph
+
+        response = service.process_message("quais perfis existem?", USER_ID, THREAD_ID)
+
+        service.pdf_renderer.render.assert_not_called()
+        service.storage_service.upload.assert_not_called()
+        assert response.report_url is None
+
 
 class TestSetup:
     @patch("multi_agent.service.FAQ")
