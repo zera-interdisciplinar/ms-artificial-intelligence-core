@@ -4,6 +4,10 @@ from logger.logger import logger
 from config.environments import Environments
 from _internal.mongo.setup import Repository
 
+# Storage imports
+from _internal.storage.service import SupabaseStorageService
+from _internal.storage.pdf import PdfRenderer
+
 # MultiAgentRepository imports
 from repository.multi_agent import MultiAgentRepository
 from multi_agent.multi_agent import IMultiAgentRepository
@@ -23,6 +27,10 @@ envs = Environments()
 # Open a new connection to the MongoDB database using the environment variables
 repository = Repository(envs)
 
+# create the storage service instances
+pdf_renderer = PdfRenderer()
+storage_service = SupabaseStorageService(envs)
+
 # create the MultiAgentRepository instance
 multi_agent_repository: IMultiAgentRepository = MultiAgentRepository()
 multi_agent_repository.setup(repository)
@@ -33,7 +41,9 @@ myLogger.Info("MultiAgentRepository setup complete")
 multi_agent_service: IMultiAgentService = MultiAgentService(
     repository=multi_agent_repository,
     envs=envs,
-    logger=myLogger
+    logger=myLogger,
+    pdf_renderer=pdf_renderer,
+    storage_service=storage_service,
 )
 multi_agent_service.setup()
 

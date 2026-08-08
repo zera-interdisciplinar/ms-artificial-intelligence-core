@@ -2,7 +2,7 @@
 
 PYTHON ?= python
 PIP ?= pip
-PYTEST ?= ./zera-ai-core/bin/pytest -q
+PYTEST ?= ./.venv/bin/pytest -q
 UVICORN ?= uvicorn
 COMPOSE ?= docker compose
 

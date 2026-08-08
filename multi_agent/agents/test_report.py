@@ -9,16 +9,14 @@ from multi_agent.agents.report import make_report_func
 
 
 class TestReportFunc:
-    def test_parses_the_report_sections_from_the_agent(self):
+    def test_parses_the_report_html_from_the_agent(self):
         report_agent = MagicMock()
         report_agent.invoke.return_value = {
             "messages": [
                 MagicMock(
                     content=json.dumps(
                         {
-                            "report_header": "Relatório — Lote 45",
-                            "report_body": "12 notebooks descartáveis.",
-                            "report_footer": "Gerado pelo sistema Zera.",
+                            "report_html": "<html><body><header>Relatório — Lote 45</header><main>12 notebooks descartáveis.</main><footer>Gerado pelo sistema Zera.</footer></body></html>",
                         }
                     )
                 )
@@ -30,7 +28,5 @@ class TestReportFunc:
 
         assert result == {
             "called_agents": [AgentName.REPORT_AGENT],
-            "report_header": "Relatório — Lote 45",
-            "report_body": "12 notebooks descartáveis.",
-            "report_footer": "Gerado pelo sistema Zera.",
+            "report_html": "<html><body><header>Relatório — Lote 45</header><main>12 notebooks descartáveis.</main><footer>Gerado pelo sistema Zera.</footer></body></html>",
         }

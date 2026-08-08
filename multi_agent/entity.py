@@ -57,6 +57,7 @@ class AgentResponse(BaseModel):
     blocked: bool = False
     blocked_reason: str | None = None
     agent_trace: list[str] = []
+    report_url: str | None = None
 
 class Message(BaseModel):
     """Represents a message exchanged in the multi-agent system."""
@@ -91,9 +92,7 @@ class State(MessagesState):
     sources: list[str]
 
     # report_agent
-    report_header: str | None
-    report_body: str | None
-    report_footer: str | None
+    report_html: str | None
 
     # predict_model
     predictions: list[dict[str, Any]]
