@@ -4,6 +4,10 @@ FROM python:3.12-slim
 # define o diretório de trabalho dentro do container
 WORKDIR /app
 
+# garante que a saída do Python (stdout/stderr) não fique bufferizada,
+# fazendo os logs aparecerem em tempo real e não só ao fim do processo
+ENV PYTHONUNBUFFERED=1
+
 # instala as dependências de sistema exigidas pelo weasyprint para renderizar HTML em PDF
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpango-1.0-0 \
