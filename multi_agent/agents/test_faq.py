@@ -2,8 +2,6 @@ import json
 from typing import cast
 from unittest.mock import MagicMock
 
-from langchain.messages import HumanMessage
-
 from multi_agent.entity import AgentName, State
 from multi_agent.agents.faq import FAQ
 
@@ -23,13 +21,14 @@ class TestFaqFunc:
         faq = FAQ(envs=MagicMock(), logger=MagicMock())
         faq.faq_agent = faq_agent
 
-        result = faq.faq_func(cast(State, {"messages": [HumanMessage(content="quais perfis existem?")]}))
+        result = faq.faq_func(cast(State, {"current_request": "quais perfis existem?"}))
 
         assert result == {
             "called_agents": [AgentName.FAQ_AGENT],
             "answer": "três perfis",
             "sources": ["zera_overview.pdf#p2"],
         }
+        faq_agent.invoke.assert_called_once_with({"messages": "quais perfis existem?"})
 
 
 class TestMakeRetrieveContextTool:

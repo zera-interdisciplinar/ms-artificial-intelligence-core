@@ -1,7 +1,7 @@
 """
 Defines the classes for the multi-agent service and repository. The multi-agent service is responsible for processing messages and the multi-agent repository is responsible for storing and retrieving messages.
 """
-from typing import Annotated, Protocol, Any
+from typing import Annotated, Any, Protocol
 from uuid import UUID
 
 from enum import Enum
@@ -68,7 +68,18 @@ class Message(BaseModel):
     content: str
     agent: AgentName | None = None
     created_at: datetime
-    
+
+class PredictionItem(BaseModel):
+    """A single predict_model result, validated right after the LLM call so a
+    malformed/hallucinated shape fails loudly there instead of propagating as
+    a plain dict into formatter/judge."""
+
+    item: str
+    estimated_remaining_months: int | None
+    adjusted: bool
+    adjustment_reason: str | None
+
+
 class State(MessagesState):
     """
     Represents the state of the multi-agent system.
@@ -95,7 +106,7 @@ class State(MessagesState):
     report_html: str | None
 
     # predict_model
-    predictions: list[dict[str, Any]]
+    predictions: list[PredictionItem]
 
     # formatter_agent
     formatted_response: str | None
@@ -107,4 +118,15 @@ class State(MessagesState):
 
     # guardrail_out
     final_response: str | None
-    
+
+
+class GraphNodeFunc(Protocol):
+    """Callable shape of a LangGraph state-graph node function.
+
+    StateGraph.add_node calls a node as node(state=...) (by keyword), so the
+    `state` parameter must keep its name. A plain `Callable[[State], dict[str,
+    Any]]` type alias erases that name, which makes pyright/mypy reject it as
+    incompatible with add_node's overloads even though the same function
+    passed in unannotated (or as a bound method) type-checks fine."""
+
+    def __call__(self, state: State) -> dict[str, Any]: ...

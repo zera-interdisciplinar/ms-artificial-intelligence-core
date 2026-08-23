@@ -1,13 +1,13 @@
 from fastapi import APIRouter
 from multi_agent.multi_agent import IMultiAgentService
 
-from multi_agent.entity import Message
+from multi_agent.entity import AgentResponse, Message
 
 def multi_agent_handlers(service: IMultiAgentService) -> APIRouter:
     new_router = APIRouter(prefix="/multi-agent", tags=["multi-agent"])
-    
+
     @new_router.post("/process-message")
-    async def process_message_endpoint(message: Message):
+    async def process_message_endpoint(message: Message) -> AgentResponse:
         """
         Process a message through the multi-agent service. It takes a Message object as input and returns the response from the multi-agent system.
         """

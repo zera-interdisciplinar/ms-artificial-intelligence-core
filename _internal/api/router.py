@@ -1,4 +1,4 @@
-from logger.logger import logger
+from logger.logger import Logger
 from config.environments import Environments
 
 from fastapi import FastAPI, APIRouter
@@ -19,29 +19,32 @@ class RouterAPI:
     
     _app: FastAPI
     
-    def __init__(self, envs: Environments, logger: logger):
+    envs: Environments
+    logger: Logger
+
+    def __init__(self, envs: Environments, logger: Logger) -> None:
         self.envs = envs
         self.logger = logger
-        
-    def BuildAPI(self, multi_agent_service: IMultiAgentService):
+
+    def BuildAPI(self, multi_agent_service: IMultiAgentService) -> None:
         """
         BuildAPI is a method that sets up the API endpoints and their corresponding logic. It initializes the necessary components and prepares the API for handling requests.
         """
         self._app = FastAPI()
 
         @self._app.get("/health", tags=["health"])
-        async def health_check():
+        async def health_check() -> dict[str, str]:
             return {"status": "ok"}
 
         group_v1 = APIRouter(prefix="/api/v1", tags=["v1"])
-        
+
         multi_agent_router = multi_agent_handlers(multi_agent_service)
-        
+
         group_v1.include_router(multi_agent_router)
-        
+
         self._app.include_router(group_v1)
-    
-    def run(self):
+
+    def run(self) -> None:
         """
         Run is a method that starts the API server and listens for incoming requests. It takes an optional port parameter to specify the port on which the server should run.
         """

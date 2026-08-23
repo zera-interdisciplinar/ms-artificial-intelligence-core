@@ -1,22 +1,26 @@
-from ..entity import State, AgentName
+from typing import Any
+
+from langgraph.graph.state import CompiledStateGraph
+
+from ..entity import State, AgentName, GraphNodeFunc
 from .message_utils import parse_json_message
-from logger.logger import logger
+from logger.logger import Logger
 
 # module-level logger instance
-_logger = logger()
+_logger = Logger()
 
-UNCLASSIFIED_INTENT_MESSAGE = (
+UNCLASSIFIED_INTENT_MESSAGE: str = (
     "Não consegui identificar sua solicitação. Poderia reformular sua pergunta "
     "com mais detalhes sobre o que você precisa?"
 )
 
 
-def make_orchestrator_func(orchestrator_agent):
+def make_orchestrator_func(orchestrator_agent: CompiledStateGraph) -> GraphNodeFunc:
     """
     Wraps orchestrator_agent so its JSON output is parsed and projected into intent/next_agent.
     """
 
-    def orchestrator_func(state: State) -> dict:
+    def orchestrator_func(state: State) -> dict[str, Any]:
         response = orchestrator_agent.invoke({"messages": state["current_request"]})
         _logger.Info("Orchestrator agent invoked")
 
@@ -26,7 +30,7 @@ def make_orchestrator_func(orchestrator_agent):
 
         next_agent = classification["next_agent"]
 
-        result: dict = {
+        result: dict[str, Any] = {
             "called_agents": [AgentName.ORCHESTRATOR],
             "intent": classification["intent"],
             "next_agent": next_agent,

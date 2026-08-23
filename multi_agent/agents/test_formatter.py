@@ -4,7 +4,7 @@ from unittest.mock import MagicMock
 
 from langchain.messages import HumanMessage
 
-from multi_agent.entity import AgentName, State
+from multi_agent.entity import AgentName, PredictionItem, State
 from multi_agent.agents.formatter import make_formatter_func
 
 
@@ -52,4 +52,46 @@ class TestFormatterFunc:
         assert sent_state == {
             "answer": "três perfis",
             "sources": ["zera_overview.pdf#p2"],
+        }
+
+    def test_serializes_prediction_items_to_plain_dicts_before_sending(self):
+        formatter_agent = MagicMock()
+        formatter_agent.invoke.return_value = {
+            "messages": [
+                MagicMock(content=json.dumps({"formatted_response": "8 meses"}))
+            ]
+        }
+        formatter_func = make_formatter_func(formatter_agent)
+
+        formatter_func(
+            cast(
+                State,
+                {
+                    "messages": [HumanMessage(content="quanto tempo falta?")],
+                    "answer": None,
+                    "sources": [],
+                    "report_html": None,
+                    "predictions": [
+                        PredictionItem(
+                            item="Notebook Dell Latitude 5420",
+                            estimated_remaining_months=8,
+                            adjusted=False,
+                            adjustment_reason=None,
+                        )
+                    ],
+                },
+            )
+        )
+
+        sent_messages = formatter_agent.invoke.call_args[0][0]["messages"]
+        sent_state = json.loads(sent_messages[0].content)
+        assert sent_state == {
+            "predictions": [
+                {
+                    "item": "Notebook Dell Latitude 5420",
+                    "estimated_remaining_months": 8,
+                    "adjusted": False,
+                    "adjustment_reason": None,
+                }
+            ],
         }

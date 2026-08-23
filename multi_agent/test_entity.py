@@ -157,6 +157,7 @@ class TestState:
         state: State = {
             "messages": [],
             "called_agents": [AgentName.GUARDRAIL_IN],
+            "current_request": "quais perfis existem?",
             "next_agent": AgentName.ORCHESTRATOR,
             "intent": "faq",
             "blocked": False,

@@ -5,36 +5,65 @@ Uses the class Environments to define the environment variables and their defaul
 """
 
 from dotenv import load_dotenv
-from logger.logger import logger
+from logger.logger import Logger
 import os
 
 load_dotenv()
-myLogger = logger()
+myLogger = Logger()
 myLogger.Info("Loading environment variables from .env file")
 
 class Environments:
     """Class that defines the environment variables and their default values."""
-    
-    def __init__(self):
+
+    # Environment
+    APP_ENV: str
+    APP_PORT: str
+    APP_HOST: str
+
+    # APIs
+    GEMINI_API_KEY: str | None
+    GROQ_API_KEY: str | None
+
+    # Database
+    MONGO_URI: str
+    MONGO_DB_NAME: str
+    MONGO_USERNAME: str
+    MONGO_PASSWORD: str | None
+
+    # FAQ
+    FAQ_PDF_PATH: str
+
+    # predict_model MCP (sdk-ml-failure-predictor, via Kong gateway)
+    PREDICT_MODEL_MCP_URL: str | None
+
+    # Supabase Storage
+    SUPABASE_URL: str | None
+    SUPABASE_SERVICE_ROLE_KEY: str | None
+    SUPABASE_BUCKET_NAME: str | None
+
+    def __init__(self) -> None:
         myLogger.Info("Initializing environment variables with default values")
-        
+
         #Environment
         self.APP_ENV = os.getenv("APP_ENV", "DEV")
         self.APP_PORT = os.getenv("APP_PORT", "8000")
         self.APP_HOST = os.getenv("APP_HOST", "0.0.0.0")
-        
+
         # APIs
         self.GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
         self.GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-        
+
         # Database
         self.MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
         self.MONGO_DB_NAME = os.getenv("MONGO_DB_NAME", "ms-artificial-intelligence-core")
         self.MONGO_USERNAME = os.getenv("MONGO_USERNAME", "root")
         self.MONGO_PASSWORD = os.getenv("MONGO_PASSWORD")
-        
+
         # FAQ
         self.FAQ_PDF_PATH = os.getenv("FAQ_PDF_PATH", "multi_agent/agents/data/faq.pdf")
+
+        # predict_model MCP (sdk-ml-failure-predictor, via Kong gateway)
+        self.PREDICT_MODEL_MCP_URL = os.getenv("PREDICT_MODEL_MCP_URL")
 
         # Supabase Storage
         self.SUPABASE_URL = os.getenv("SUPABASE_URL")

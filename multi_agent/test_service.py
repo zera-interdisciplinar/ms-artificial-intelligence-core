@@ -1,5 +1,6 @@
+import asyncio
 from typing import Any, cast
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import UUID
 
 import pytest
@@ -154,6 +155,7 @@ class TestProcessMessage:
 
 
 class TestSetup:
+    @patch("multi_agent.service.MultiServerMCPClient")
     @patch("multi_agent.service.FAQ")
     @patch("multi_agent.service.StateGraph")
     @patch("multi_agent.service.MemorySaver")
@@ -161,18 +163,82 @@ class TestSetup:
     @patch("multi_agent.service.ChatGroq")
     @patch("multi_agent.service.ChatGoogleGenerativeAI")
     def test_builds_the_guardrail_and_compiles_the_graph(
-        self, mock_llm, mock_groq_llm, mock_create_agent, mock_memory_saver, mock_state_graph, mock_faq, service
+        self, mock_llm, mock_groq_llm, mock_create_agent, mock_memory_saver, mock_state_graph, mock_faq, mock_mcp_client, service
     ):
         mock_create_agent.side_effect = lambda **kwargs: MagicMock()
         mock_memory_saver.return_value = InMemorySaver()
         mock_graph = mock_state_graph.return_value
         mock_graph.compile.return_value = MagicMock()
 
+        predict_tool = MagicMock(name="predict_time_to_failure")
+        predict_tool.name = "predict_time_to_failure"
+        categories_tool = MagicMock(name="list_valid_categories")
+        categories_tool.name = "list_valid_categories"
+        categories_tool.ainvoke = AsyncMock(return_value=["notebook"])
+        climate_zones_tool = MagicMock(name="list_valid_climate_zones")
+        climate_zones_tool.name = "list_valid_climate_zones"
+        climate_zones_tool.ainvoke = AsyncMock(return_value=["TROPICAL"])
+        mock_mcp_client.return_value.get_tools = AsyncMock(
+            return_value=[predict_tool, categories_tool, climate_zones_tool]
+        )
+
         service.setup()
 
         assert mock_llm.called
         assert mock_create_agent.call_count == 8
+        mock_mcp_client.assert_called_once_with(
+            {
+                "predict_model": {
+                    "url": service.envs.PREDICT_MODEL_MCP_URL,
+                    "transport": "streamable_http",
+                }
+            }
+        )
         assert service.guardrail is not None
         assert service.graph is mock_graph
         assert service._MultiAgentService__compiled_graph is mock_graph.compile.return_value
         mock_graph.compile.assert_called_once()
+
+
+class TestFetchPredictModelTools:
+    @patch("multi_agent.service.MultiServerMCPClient")
+    def test_fetches_tools_from_the_predict_model_mcp_server(self, mock_mcp_client, service):
+        tools = [MagicMock(name="predict_time_to_failure")]
+        mock_mcp_client.return_value.get_tools = AsyncMock(return_value=tools)
+        service.envs.PREDICT_MODEL_MCP_URL = "https://gateway.zera.internal/predictor"
+
+        result = asyncio.run(service._fetch_predict_model_tools())
+
+        mock_mcp_client.assert_called_once_with(
+            {
+                "predict_model": {
+                    "url": "https://gateway.zera.internal/predictor",
+                    "transport": "streamable_http",
+                }
+            }
+        )
+        assert result == tools
+
+
+class TestFetchPredictModelContext:
+    @patch("multi_agent.service.MultiServerMCPClient")
+    def test_separates_the_agent_tool_from_the_vocabulary_tools(self, mock_mcp_client, service):
+        predict_tool = MagicMock(name="predict_time_to_failure")
+        predict_tool.name = "predict_time_to_failure"
+        categories_tool = MagicMock(name="list_valid_categories")
+        categories_tool.name = "list_valid_categories"
+        categories_tool.ainvoke = AsyncMock(return_value=["notebook", "celular"])
+        climate_zones_tool = MagicMock(name="list_valid_climate_zones")
+        climate_zones_tool.name = "list_valid_climate_zones"
+        climate_zones_tool.ainvoke = AsyncMock(return_value=["TROPICAL", "ARID"])
+        mock_mcp_client.return_value.get_tools = AsyncMock(
+            return_value=[predict_tool, categories_tool, climate_zones_tool]
+        )
+
+        predict_model_tools, categories, climate_zones = asyncio.run(
+            service._fetch_predict_model_context()
+        )
+
+        assert predict_model_tools == [predict_tool]
+        assert categories == ["notebook", "celular"]
+        assert climate_zones == ["TROPICAL", "ARID"]

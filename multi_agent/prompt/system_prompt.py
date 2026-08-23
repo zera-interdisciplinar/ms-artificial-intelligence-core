@@ -3,7 +3,7 @@
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-SAO_PAULO_TZ = ZoneInfo("America/Sao_Paulo")
+SAO_PAULO_TZ: ZoneInfo = ZoneInfo("America/Sao_Paulo")
 
 GENERAL_SYSTEM_PROMPT: str = """
 # Prompt Geral do Sistema — Zera Multi-Agente

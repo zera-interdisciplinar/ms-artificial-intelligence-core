@@ -1,18 +1,21 @@
 import json
+from typing import Any
 
-from ..entity import State, AgentName
+from langgraph.graph.state import CompiledStateGraph
+
+from ..entity import State, AgentName, GraphNodeFunc
 from .message_utils import parse_json_message
-from langchain.messages import HumanMessage, SystemMessage, AIMessage
-from logger.logger import logger
+from langchain.messages import HumanMessage, SystemMessage
+from logger.logger import Logger
 
 # module-level logger instance
-_logger = logger()
+_logger = Logger()
 
 # total number of judge_agent evaluations allowed per user message: 1 execution + 1 retry.
-MAX_JUDGE_ATTEMPTS = 2
+MAX_JUDGE_ATTEMPTS: int = 2
 
 
-def make_judge_func(judge_agent):
+def make_judge_func(judge_agent: CompiledStateGraph) -> GraphNodeFunc:
     """
     Wraps judge_agent so its JSON output is parsed and projected into approved/discrepancy.
     When the response is not approved and there are attempts left, resets the fields
@@ -20,7 +23,7 @@ def make_judge_func(judge_agent):
     conversation so the next attempt (starting from orchestrator) can address it.
     """
 
-    def judge_func(state: State) -> dict:
+    def judge_func(state: State) -> dict[str, Any]:
         request = state["current_request"]
         _logger.Debug(f"Judge: request preview={request}")
 
@@ -48,7 +51,7 @@ def make_judge_func(judge_agent):
 
         attempts_done = state.get("judge_attempts", 0) + 1 # this func is also a attempt, so we increment the attempts done by 1
 
-        result: dict = {
+        result: dict[str, Any] = {
             "called_agents": [AgentName.JUDGE_AGENT],
             "approved": approved,
             "discrepancy": discrepancy,

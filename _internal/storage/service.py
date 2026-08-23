@@ -10,7 +10,7 @@ class SupabaseStorageService(IStorageService):
 
     client: Client
 
-    def __init__(self, envs: Environments):
+    def __init__(self, envs: Environments) -> None:
         if not envs.SUPABASE_URL or not envs.SUPABASE_SERVICE_ROLE_KEY or not envs.SUPABASE_BUCKET_NAME:
             raise StorageConfigurationException(
                 "SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY and SUPABASE_BUCKET_NAME must all be set to use SupabaseStorageService."

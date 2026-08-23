@@ -25,4 +25,7 @@ Thumbs.db
 *.pyc.*
 
 # ambiente virtual
-zera-ai-core/ 
+zera-ai-core/
+
+# AI context
+.claude
