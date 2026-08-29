@@ -48,7 +48,7 @@ jobs:
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
       MONGO_URI: mongodb://localhost:27017
-      MONGO_DB_NAME: ms-artificial-intelligence-core-ci
+      MONGO_DB_NAME: ms-artificial-intelligence-core
       PREDICT_MODEL_MCP_URL: ${{ secrets.PREDICT_MODEL_MCP_URL }}
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
