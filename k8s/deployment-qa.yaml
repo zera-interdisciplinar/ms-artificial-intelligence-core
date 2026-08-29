@@ -21,7 +21,7 @@ spec:
     spec:
       containers:
       - name: ms-artificial-intelligence-core
-        image: us-central1-docker.pkg.dev/zera1405/repo/ms-artificial-intelligence-core:IMAGE_TAG
+        image: southamerica-east1-docker.pkg.dev/zera-506513/repo/ms-artificial-intelligence-core:IMAGE_TAG
         imagePullPolicy: Always
         ports:
         - containerPort: 8000
