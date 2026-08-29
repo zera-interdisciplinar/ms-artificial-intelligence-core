@@ -87,12 +87,12 @@ class FAQ:
         return retrieve_context
 
 
-    def faq_func(self, state: State) -> dict[str, Any]:
+    async def faq_func(self, state: State) -> dict[str, Any]:
         """
         Wraps faq_agent so its JSON output is parsed and projected into answer/sources.
         """
         assert self.faq_agent is not None, "faq_agent is not set; call setup() and assign faq_agent before invoking"
-        response = self.faq_agent.invoke({"messages": state["current_request"]})
+        response = await self.faq_agent.ainvoke({"messages": state["current_request"]})
         self.logger.Info("FAQ agent invoked")
 
         self.logger.Debug(f"FAQ raw response={response['messages'][-1].content}")

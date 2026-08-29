@@ -23,11 +23,11 @@ def make_judge_func(judge_agent: CompiledStateGraph) -> GraphNodeFunc:
     conversation so the next attempt (starting from orchestrator) can address it.
     """
 
-    def judge_func(state: State) -> dict[str, Any]:
+    async def judge_func(state: State) -> dict[str, Any]:
         request = state["current_request"]
         _logger.Debug(f"Judge: request preview={request}")
 
-        response = judge_agent.invoke(
+        response = await judge_agent.ainvoke(
             {
                 "messages": [
                     HumanMessage(

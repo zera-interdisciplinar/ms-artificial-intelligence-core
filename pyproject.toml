@@ -1,6 +1,9 @@
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["_internal", "app", "config", "logger", "multi_agent", "repository"]
+markers = [
+    "integration: hits real external services (Gemini, Groq, Mongo, Supabase, predict_model MCP); see multi_agent/test_integration.py",
+]
 
 [tool.coverage.run]
 omit = [

@@ -121,12 +121,19 @@ class State(MessagesState):
 
 
 class GraphNodeFunc(Protocol):
-    """Callable shape of a LangGraph state-graph node function.
+    """Callable shape of an async LangGraph state-graph node function.
 
     StateGraph.add_node calls a node as node(state=...) (by keyword), so the
-    `state` parameter must keep its name. A plain `Callable[[State], dict[str,
-    Any]]` type alias erases that name, which makes pyright/mypy reject it as
-    incompatible with add_node's overloads even though the same function
-    passed in unannotated (or as a bound method) type-checks fine."""
+    `state` parameter must keep its name. A plain `Callable[[State],
+    Awaitable[dict[str, Any]]]` type alias erases that name, which makes
+    pyright/mypy reject it as incompatible with add_node's overloads even
+    though the same function passed in unannotated (or as a bound method)
+    type-checks fine.
 
-    def __call__(self, state: State) -> dict[str, Any]: ...
+    Every node is async because the predict_model node calls an MCP tool
+    that only has an async implementation (langchain-mcp-adapters wraps MCP
+    tools with `coroutine=...`, no sync `func=`); mixing a sync StateGraph
+    with that async-only node isn't possible, so the whole graph — and every
+    node in it — runs via ainvoke."""
+
+    async def __call__(self, state: State) -> dict[str, Any]: ...

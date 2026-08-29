@@ -20,8 +20,8 @@ def make_orchestrator_func(orchestrator_agent: CompiledStateGraph) -> GraphNodeF
     Wraps orchestrator_agent so its JSON output is parsed and projected into intent/next_agent.
     """
 
-    def orchestrator_func(state: State) -> dict[str, Any]:
-        response = orchestrator_agent.invoke({"messages": state["current_request"]})
+    async def orchestrator_func(state: State) -> dict[str, Any]:
+        response = await orchestrator_agent.ainvoke({"messages": state["current_request"]})
         _logger.Info("Orchestrator agent invoked")
 
         _logger.Debug(f"Orchestrator raw response={response['messages'][-1].content}")

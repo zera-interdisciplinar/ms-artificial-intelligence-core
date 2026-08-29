@@ -107,14 +107,18 @@ class MultiAgentService(IMultiAgentService):
         )
         return await client.get_tools()
 
-    async def _fetch_predict_model_context(self) -> tuple[list[BaseTool], list[str], list[str]]:
+    async def _fetch_predict_model_context(self) -> tuple[BaseTool, list[str], list[str]]:
         """
-        Besides predict_time_to_failure, the predict_model MCP server also exposes
+        Besides predict_time_to_failure_batch, the predict_model MCP server also exposes
         list_valid_categories/list_valid_climate_zones, read directly from the
         trained model's vocabulary. We call them once here to build the
         predict_model system prompt at boot, instead of keeping a hand-copied
         list in the prompt that can silently drift from the trained model
         (see docs/integration-predict-time-to-failure.md).
+
+        Returns the predict_time_to_failure_batch tool so it can be bound directly to
+        predict_model_agent: the agent itself extracts, validates/clamps and calls it
+        once with every eligible item (see multi_agent/prompt/predict_model.py).
         """
         tools = await self._fetch_predict_model_tools()
         tools_by_name: dict[str, BaseTool] = {tool.name: tool for tool in tools}
@@ -122,9 +126,9 @@ class MultiAgentService(IMultiAgentService):
         categories: list[str] = await tools_by_name["list_valid_categories"].ainvoke({})
         climate_zones: list[str] = await tools_by_name["list_valid_climate_zones"].ainvoke({})
 
-        predict_model_tools = [tool for tool in tools if tool.name == "predict_time_to_failure"]
+        predict_time_to_failure_batch = tools_by_name["predict_time_to_failure_batch"]
 
-        return predict_model_tools, categories, climate_zones
+        return predict_time_to_failure_batch, categories, climate_zones
 
     def setup(self) -> None:
         """
@@ -140,11 +144,12 @@ class MultiAgentService(IMultiAgentService):
             temperature = 0.2,
             top_p = 0.9,
             api_key = api_key,
+            reasoning_effort = "low",
         )
 
         # uses groq as fallback if gemini is not available
         llm_groq = ChatGroq(
-            model="llama-3.3-70b-versatile",
+            model="openai/gpt-oss-120b",
             temperature=0.2,
             api_key=SecretStr(self.envs.GROQ_API_KEY) if self.envs.GROQ_API_KEY else None,
         )
@@ -152,12 +157,14 @@ class MultiAgentService(IMultiAgentService):
         # we just use cast here to hide the type error, but in run time this should not be a problem
         llm = cast(BaseChatModel, llm_gemini.with_fallbacks([llm_groq]))
         
-        llm_fast = ChatGoogleGenerativeAI(
-            model = "gemini-3.1-flash-lite",
+        llm_gemini_fast = ChatGoogleGenerativeAI(
+            model = "gemini-3.5-flash-lite",
             temperature = 0.2,
             top_p = 0.9,
             api_key = api_key,
+            reasoning_effort = "low",
         )
+        llm_fast = cast(BaseChatModel, llm_gemini_fast.with_fallbacks([llm_groq]))
 
         # initializes the system agents
         guardrail_in_agent = create_agent(
@@ -170,21 +177,20 @@ class MultiAgentService(IMultiAgentService):
             system_prompt=ORCHESTRATOR_SYSTEM_PROMPT_FINAL,
         )
 
-        # discovers the predict_time_to_failure tool and the valid category/climateZone
+        # discovers the predict_time_to_failure_batch tool and the valid category/climateZone
         # domains from the sdk-ml-failure-predictor MCP server (via Kong)
         self.logger.Info("Fetching predict_model MCP tools")
-        predict_model_tools, valid_categories, valid_climate_zones = asyncio.run(
+        predict_time_to_failure_batch, valid_categories, valid_climate_zones = asyncio.run(
             self._fetch_predict_model_context()
         )
-
         predict_model_agent = create_agent(
-            model=llm,
+            model=llm_fast,
             system_prompt=build_predict_model_system_prompt(valid_categories, valid_climate_zones),
-            tools=predict_model_tools,
+            tools=[predict_time_to_failure_batch],
         )
 
         report_agent = create_agent(
-            model=llm,
+            model=llm_fast,
             system_prompt=REPORT_AGENT_SYSTEM_PROMPT_FINAL,
         )
 
@@ -274,7 +280,7 @@ class MultiAgentService(IMultiAgentService):
         memory = MemorySaver()
         self.__compiled_graph = new_graph.compile(checkpointer=memory)
 
-    def process_message(self, message: str, user_id: UUID, thread_id: UUID) -> AgentResponse:
+    async def process_message(self, message: str, user_id: UUID, thread_id: UUID) -> AgentResponse:
         # certifies that the graph is already compiled
         if self.__compiled_graph is None:
             self.logger.Error("The multi-agent service is not set up. Please call the setup() method before processing messages.", MultiAgentServiceNotSetupException)
@@ -326,7 +332,7 @@ class MultiAgentService(IMultiAgentService):
         
         self.logger.Info(f"Processing message for user_id: {user_id}, thread_id: {thread_id}")
         
-        end_state = self.__compiled_graph.invoke(
+        end_state = await self.__compiled_graph.ainvoke(
             initial_state,
             config = {
                 "configurable": {

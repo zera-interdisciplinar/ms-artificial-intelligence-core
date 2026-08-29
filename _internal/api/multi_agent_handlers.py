@@ -12,13 +12,9 @@ def multi_agent_handlers(service: IMultiAgentService) -> APIRouter:
         Process a message through the multi-agent service. It takes a Message object as input and returns the response from the multi-agent system.
         """
         
-        response = service.process_message(
+        response = await service.process_message(
             message.content, message.user_id, message.thread_id
         )
         return response
-        
-        
-        
-    
     
     return new_router

@@ -67,7 +67,7 @@ class Guardrail:
         # ==============================================
         # GUARDRAIL IN FUNCTIONS
         # ==============================================
-        def guardrail_in_func(self, state: State, config: RunnableConfig) -> dict[str, Any]:
+        async def guardrail_in_func(self, state: State, config: RunnableConfig) -> dict[str, Any]:
                 """
                 Function to handle the guardrail_in state. It works in this pipe: anonimize the user input + make the PII map -> use llm to classify the user input as safe or unsafe -> if unsafe, block the user input and return the reason, otherwise, return the user input to the orchestrator.
                 """
@@ -91,7 +91,7 @@ class Guardrail:
 
                 # call the guardrail_in_agent to classify the user input as safe or unsafe
                 self.logger.Info("Guardrail in: invoking guardrail_in_agent for classification")
-                guardrail_in_response = self.guardrail_in_agent.invoke(
+                guardrail_in_response = await self.guardrail_in_agent.ainvoke(
                     {"messages": [masked_message]}
                 )
 
@@ -155,7 +155,7 @@ class Guardrail:
         # ==============================================
         # GUARDRAIL OUT FUNCTIONS
         # ==============================================
-        def guardrail_out_func(self, state: State) -> dict[str, Any]:
+        async def guardrail_out_func(self, state: State) -> dict[str, Any]:
                 """
                 Function to handle the guardrail_out state. It works in this pipe: last validation of the response by the guardrail_out_agent -> retreive the PII from the response using the PII map -> return the response to the user.
                 """
@@ -164,7 +164,7 @@ class Guardrail:
 
                 # call the guardrail_out_agent to validate the formatted response as safe or unsafe
                 self.logger.Info("Guardrail out: invoking guardrail_out_agent for final validation")
-                guardrail_out_response = self.guardrail_out_agent.invoke(
+                guardrail_out_response = await self.guardrail_out_agent.ainvoke(
                     {"messages": [HumanMessage(content=json.dumps({"formatted_response": formatted_response}))]}
                 )
 

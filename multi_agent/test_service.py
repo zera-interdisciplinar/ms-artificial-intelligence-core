@@ -37,20 +37,20 @@ def service(envs: Any) -> MultiAgentService:
 class TestProcessMessage:
     def test_raises_when_the_service_has_not_been_setup(self, service):
         with pytest.raises(MultiAgentServiceNotSetupException):
-            service.process_message("olá", USER_ID, THREAD_ID)
+            asyncio.run(service.process_message("olá", USER_ID, THREAD_ID))
 
     def test_returns_agent_response_built_from_the_graph_end_state(self, service):
         compiled_graph = MagicMock()
-        compiled_graph.invoke.return_value = {
+        compiled_graph.ainvoke = AsyncMock(return_value={
             "final_response": "três perfis",
             "blocked": False,
             "blocked_reason": None,
             "called_agents": [AgentName.GUARDRAIL_IN, AgentName.ORCHESTRATOR],
             "report_html": None,
-        }
+        })
         service._MultiAgentService__compiled_graph = compiled_graph
 
-        response = service.process_message("quais perfis existem?", USER_ID, THREAD_ID)
+        response = asyncio.run(service.process_message("quais perfis existem?", USER_ID, THREAD_ID))
 
         assert response == AgentResponse(
             content="três perfis",
@@ -61,18 +61,18 @@ class TestProcessMessage:
 
     def test_invokes_the_graph_with_user_and_thread_ids_configured(self, service):
         compiled_graph = MagicMock()
-        compiled_graph.invoke.return_value = {
+        compiled_graph.ainvoke = AsyncMock(return_value={
             "final_response": "resposta",
             "blocked": True,
             "blocked_reason": "conteúdo sensível",
             "called_agents": [],
             "report_html": None,
-        }
+        })
         service._MultiAgentService__compiled_graph = compiled_graph
 
-        service.process_message("olá", USER_ID, THREAD_ID)
+        asyncio.run(service.process_message("olá", USER_ID, THREAD_ID))
 
-        _, kwargs = compiled_graph.invoke.call_args
+        _, kwargs = compiled_graph.ainvoke.call_args
         assert kwargs["config"]["configurable"] == {
             "user_id": USER_ID,
             "thread_id": THREAD_ID,
@@ -80,18 +80,18 @@ class TestProcessMessage:
 
     def test_renders_and_uploads_the_report_when_report_agent_was_called(self, service):
         compiled_graph = MagicMock()
-        compiled_graph.invoke.return_value = {
+        compiled_graph.ainvoke = AsyncMock(return_value={
             "final_response": "aqui está o relatório",
             "blocked": False,
             "blocked_reason": None,
             "called_agents": [AgentName.GUARDRAIL_IN, AgentName.REPORT_AGENT],
             "report_html": "<html><body>relatório</body></html>",
-        }
+        })
         service._MultiAgentService__compiled_graph = compiled_graph
         service.pdf_renderer.render.return_value = b"%PDF-1.7"
         service.storage_service.upload.return_value = "https://xxxxx.supabase.co/storage/v1/object/public/zera-reports/report.pdf"
 
-        response = service.process_message("gere o relatório", USER_ID, THREAD_ID)
+        response = asyncio.run(service.process_message("gere o relatório", USER_ID, THREAD_ID))
 
         service.pdf_renderer.render.assert_called_once_with("<html><body>relatório</body></html>")
         _, upload_kwargs = service.storage_service.upload.call_args
@@ -102,16 +102,16 @@ class TestProcessMessage:
 
     def test_does_not_render_or_upload_when_report_agent_was_not_called(self, service):
         compiled_graph = MagicMock()
-        compiled_graph.invoke.return_value = {
+        compiled_graph.ainvoke = AsyncMock(return_value={
             "final_response": "três perfis",
             "blocked": False,
             "blocked_reason": None,
             "called_agents": [AgentName.GUARDRAIL_IN, AgentName.ORCHESTRATOR],
             "report_html": None,
-        }
+        })
         service._MultiAgentService__compiled_graph = compiled_graph
 
-        response = service.process_message("quais perfis existem?", USER_ID, THREAD_ID)
+        response = asyncio.run(service.process_message("quais perfis existem?", USER_ID, THREAD_ID))
 
         service.pdf_renderer.render.assert_not_called()
         service.storage_service.upload.assert_not_called()
@@ -119,17 +119,17 @@ class TestProcessMessage:
 
     def test_keeps_the_chat_response_when_pdf_rendering_fails(self, service):
         compiled_graph = MagicMock()
-        compiled_graph.invoke.return_value = {
+        compiled_graph.ainvoke = AsyncMock(return_value={
             "final_response": "aqui está o relatório",
             "blocked": False,
             "blocked_reason": None,
             "called_agents": [AgentName.GUARDRAIL_IN, AgentName.REPORT_AGENT],
             "report_html": "<html><body>relatório</body></html>",
-        }
+        })
         service._MultiAgentService__compiled_graph = compiled_graph
         service.pdf_renderer.render.side_effect = PDFRenderException("invalid markup")
 
-        response = service.process_message("gere o relatório", USER_ID, THREAD_ID)
+        response = asyncio.run(service.process_message("gere o relatório", USER_ID, THREAD_ID))
 
         service.storage_service.upload.assert_not_called()
         assert response.content == "aqui está o relatório"
@@ -137,18 +137,18 @@ class TestProcessMessage:
 
     def test_keeps_the_chat_response_when_upload_fails(self, service):
         compiled_graph = MagicMock()
-        compiled_graph.invoke.return_value = {
+        compiled_graph.ainvoke = AsyncMock(return_value={
             "final_response": "aqui está o relatório",
             "blocked": False,
             "blocked_reason": None,
             "called_agents": [AgentName.GUARDRAIL_IN, AgentName.REPORT_AGENT],
             "report_html": "<html><body>relatório</body></html>",
-        }
+        })
         service._MultiAgentService__compiled_graph = compiled_graph
         service.pdf_renderer.render.return_value = b"%PDF-1.7"
         service.storage_service.upload.side_effect = StorageUploadException("404 Not Found")
 
-        response = service.process_message("gere o relatório", USER_ID, THREAD_ID)
+        response = asyncio.run(service.process_message("gere o relatório", USER_ID, THREAD_ID))
 
         assert response.content == "aqui está o relatório"
         assert response.report_url is None
@@ -170,8 +170,8 @@ class TestSetup:
         mock_graph = mock_state_graph.return_value
         mock_graph.compile.return_value = MagicMock()
 
-        predict_tool = MagicMock(name="predict_time_to_failure")
-        predict_tool.name = "predict_time_to_failure"
+        predict_batch_tool = MagicMock(name="predict_time_to_failure_batch")
+        predict_batch_tool.name = "predict_time_to_failure_batch"
         categories_tool = MagicMock(name="list_valid_categories")
         categories_tool.name = "list_valid_categories"
         categories_tool.ainvoke = AsyncMock(return_value=["notebook"])
@@ -179,7 +179,7 @@ class TestSetup:
         climate_zones_tool.name = "list_valid_climate_zones"
         climate_zones_tool.ainvoke = AsyncMock(return_value=["TROPICAL"])
         mock_mcp_client.return_value.get_tools = AsyncMock(
-            return_value=[predict_tool, categories_tool, climate_zones_tool]
+            return_value=[predict_batch_tool, categories_tool, climate_zones_tool]
         )
 
         service.setup()
@@ -222,9 +222,9 @@ class TestFetchPredictModelTools:
 
 class TestFetchPredictModelContext:
     @patch("multi_agent.service.MultiServerMCPClient")
-    def test_separates_the_agent_tool_from_the_vocabulary_tools(self, mock_mcp_client, service):
-        predict_tool = MagicMock(name="predict_time_to_failure")
-        predict_tool.name = "predict_time_to_failure"
+    def test_separates_the_batch_tool_from_the_vocabulary_tools(self, mock_mcp_client, service):
+        predict_batch_tool = MagicMock(name="predict_time_to_failure_batch")
+        predict_batch_tool.name = "predict_time_to_failure_batch"
         categories_tool = MagicMock(name="list_valid_categories")
         categories_tool.name = "list_valid_categories"
         categories_tool.ainvoke = AsyncMock(return_value=["notebook", "celular"])
@@ -232,13 +232,13 @@ class TestFetchPredictModelContext:
         climate_zones_tool.name = "list_valid_climate_zones"
         climate_zones_tool.ainvoke = AsyncMock(return_value=["TROPICAL", "ARID"])
         mock_mcp_client.return_value.get_tools = AsyncMock(
-            return_value=[predict_tool, categories_tool, climate_zones_tool]
+            return_value=[predict_batch_tool, categories_tool, climate_zones_tool]
         )
 
-        predict_model_tools, categories, climate_zones = asyncio.run(
+        predict_time_to_failure_batch, categories, climate_zones = asyncio.run(
             service._fetch_predict_model_context()
         )
 
-        assert predict_model_tools == [predict_tool]
+        assert predict_time_to_failure_batch is predict_batch_tool
         assert categories == ["notebook", "celular"]
         assert climate_zones == ["TROPICAL", "ARID"]

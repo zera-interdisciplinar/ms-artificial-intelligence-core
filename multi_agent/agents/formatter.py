@@ -17,7 +17,7 @@ def make_formatter_func(formatter_agent: CompiledStateGraph) -> GraphNodeFunc:
     Wraps formatter_agent so its JSON output is parsed and projected into formatted_response.
     """
 
-    def formatter_func(state: State) -> dict[str, Any]:
+    async def formatter_func(state: State) -> dict[str, Any]:
         source_state: dict[str, Any] = {
             key: state.get(key)
             for key in (
@@ -33,7 +33,7 @@ def make_formatter_func(formatter_agent: CompiledStateGraph) -> GraphNodeFunc:
             source_state["predictions"] = [p.model_dump() for p in predictions]
         _logger.Debug(f"Formatter input state={source_state}")
 
-        response = formatter_agent.invoke(
+        response = await formatter_agent.ainvoke(
             {"messages": [HumanMessage(content=json.dumps(source_state))]}
         )
         _logger.Info("Formatter agent invoked")

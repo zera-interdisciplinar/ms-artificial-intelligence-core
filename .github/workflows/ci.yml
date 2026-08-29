@@ -27,10 +27,45 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Run tests with coverage
-        run: pytest --cov=. --cov-report=xml --cov-fail-under=80
+        run: pytest -m "not integration" --cov=. --cov-report=xml --cov-fail-under=80
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
         with:
           file: ./coverage.xml
           token: ${{ secrets.CODECOV_TOKEN }}
+
+  integration-test:
+    name: Integration tests
+    runs-on: ubuntu-latest
+    services:
+      mongodb:
+        image: mongo:7
+        ports:
+          - 27017:27017
+
+    env:
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+      MONGO_URI: mongodb://localhost:27017
+      MONGO_DB_NAME: ms-artificial-intelligence-core-ci
+      PREDICT_MODEL_MCP_URL: ${{ secrets.PREDICT_MODEL_MCP_URL }}
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      SUPABASE_BUCKET_NAME: ${{ secrets.SUPABASE_BUCKET_NAME }}
+      FAQ_PDF_PATH: multi_agent/agents/data/faq.pdf
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run integration tests
+        run: pytest multi_agent/test_integration.py -v -m integration

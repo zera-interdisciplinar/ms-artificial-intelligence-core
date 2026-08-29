@@ -68,7 +68,7 @@ class IMultiAgentService(Protocol):
         """
         ...
 
-    def process_message(
+    async def process_message(
         self, message: str, user_id: UUID, thread_id: UUID
     ) -> AgentResponse:
         """

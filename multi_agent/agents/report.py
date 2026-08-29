@@ -15,8 +15,8 @@ def make_report_func(report_agent: CompiledStateGraph) -> GraphNodeFunc:
     Wraps report_agent so its JSON output is parsed and projected into report_html.
     """
 
-    def report_func(state: State) -> dict[str, Any]:
-        response = report_agent.invoke({"messages": state["current_request"]})
+    async def report_func(state: State) -> dict[str, Any]:
+        response = await report_agent.ainvoke({"messages": state["current_request"]})
         _logger.Info("Report agent invoked")
 
         _logger.Debug(f"Report raw response={response['messages'][-1].content}")
