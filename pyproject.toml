@@ -2,7 +2,7 @@
 pythonpath = ["."]
 testpaths = ["_internal", "app", "config", "logger", "multi_agent", "repository"]
 markers = [
-    "integration: hits real external services (Gemini, Groq, Mongo, Supabase, predict_model MCP); see multi_agent/test_integration.py",
+    "integration: hits real external services (Gemini, Groq, Mongo, Supabase, predict_model MCP); see _internal/api/test_fastapi.py",
 ]
 
 [tool.coverage.run]
