@@ -1,21 +1,24 @@
 import json
+from typing import Any
 
-from ..entity import State, AgentName
+from langgraph.graph.state import CompiledStateGraph
+
+from ..entity import State, AgentName, GraphNodeFunc
 from .message_utils import parse_json_message
 from langchain.messages import HumanMessage
-from logger.logger import logger
+from logger.logger import Logger
 
 # module-level logger instance
-_logger = logger()
+_logger = Logger()
 
 
-def make_formatter_func(formatter_agent):
+def make_formatter_func(formatter_agent: CompiledStateGraph) -> GraphNodeFunc:
     """
     Wraps formatter_agent so its JSON output is parsed and projected into formatted_response.
     """
 
-    def formatter_func(state: State) -> dict:
-        source_state = {
+    async def formatter_func(state: State) -> dict[str, Any]:
+        source_state: dict[str, Any] = {
             key: state.get(key)
             for key in (
                 "answer",
@@ -25,9 +28,12 @@ def make_formatter_func(formatter_agent):
             )
             if state.get(key) not in (None, [], "")
         }
+        predictions = state.get("predictions")
+        if predictions:
+            source_state["predictions"] = [p.model_dump() for p in predictions]
         _logger.Debug(f"Formatter input state={source_state}")
 
-        response = formatter_agent.invoke(
+        response = await formatter_agent.ainvoke(
             {"messages": [HumanMessage(content=json.dumps(source_state))]}
         )
         _logger.Info("Formatter agent invoked")

@@ -6,13 +6,13 @@ Pipeline for FAIIS: read -> preprocess -> chunking -> embedding -> FAISS -> cont
 FAQ agent package with a wrapper function to parse its output into a json format to update the state with answer and sources.
 """
 
-from typing import Optional
+from typing import Any, Optional
 
 from config.environments import Environments
 
 from ..entity import State, AgentName
 from .message_utils import parse_json_message
-from logger.logger import logger
+from logger.logger import Logger
 from pydantic import SecretStr
 
 # langchain imports
@@ -20,25 +20,27 @@ from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_community.vectorstores import FAISS
+from langchain_core.documents import Document
+from langchain_core.tools import BaseTool
 
 from langchain.tools import tool
 from langgraph.graph.state import CompiledStateGraph
-
-_logger = logger()
 
 class FAQ:
     """
     Class that holds the faq_agent and the functions that use it.
     """
-    
-    _faiss_indexes: FAISS
 
-    def __init__(self, envs: Environments, logger: logger):
+    _faiss_indexes: FAISS
+    envs: Environments
+    logger: Logger
+
+    def __init__(self, envs: Environments, logger: Logger) -> None:
         self.faq_agent: Optional[CompiledStateGraph] = None
         self.envs = envs
         self.logger = logger
 
-    def setup(self):
+    def setup(self) -> None:
         """
         Setup function to initialize the FAQ agent and the FAISS index from a document.
         """
@@ -67,13 +69,13 @@ class FAQ:
         self.logger.Info("FAISS index created successfully")
         
         
-    def make_retrieve_context_tool(self):
+    def make_retrieve_context_tool(self) -> BaseTool:
         """
         Builds the retrieve_context tool bound to this FAQ instance's FAISS index.
         """
 
         @tool("retrieve_context", description="Retrieve the most relevant passages from the FAISS index based on the input context.")
-        def retrieve_context(ctx: str):
+        def retrieve_context(ctx: str) -> list[Document]:
             """
             Retrieve the most relevant passages from the FAISS index based on the input context. It receives only the context string and returns a list of relevant documents.
             """
@@ -85,12 +87,12 @@ class FAQ:
         return retrieve_context
 
 
-    def faq_func(self, state: State) -> dict:
+    async def faq_func(self, state: State) -> dict[str, Any]:
         """
         Wraps faq_agent so its JSON output is parsed and projected into answer/sources.
         """
         assert self.faq_agent is not None, "faq_agent is not set; call setup() and assign faq_agent before invoking"
-        response = self.faq_agent.invoke({"messages": state["messages"]})
+        response = await self.faq_agent.ainvoke({"messages": state["current_request"]})
         self.logger.Info("FAQ agent invoked")
 
         self.logger.Debug(f"FAQ raw response={response['messages'][-1].content}")

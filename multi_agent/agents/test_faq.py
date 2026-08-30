@@ -1,8 +1,7 @@
+import asyncio
 import json
 from typing import cast
-from unittest.mock import MagicMock
-
-from langchain.messages import HumanMessage
+from unittest.mock import AsyncMock, MagicMock
 
 from multi_agent.entity import AgentName, State
 from multi_agent.agents.faq import FAQ
@@ -11,7 +10,7 @@ from multi_agent.agents.faq import FAQ
 class TestFaqFunc:
     def test_parses_the_answer_and_sources_from_the_agent(self):
         faq_agent = MagicMock()
-        faq_agent.invoke.return_value = {
+        faq_agent.ainvoke = AsyncMock(return_value={
             "messages": [
                 MagicMock(
                     content=json.dumps(
@@ -19,17 +18,18 @@ class TestFaqFunc:
                     )
                 )
             ]
-        }
+        })
         faq = FAQ(envs=MagicMock(), logger=MagicMock())
         faq.faq_agent = faq_agent
 
-        result = faq.faq_func(cast(State, {"messages": [HumanMessage(content="quais perfis existem?")]}))
+        result = asyncio.run(faq.faq_func(cast(State, {"current_request": "quais perfis existem?"})))
 
         assert result == {
             "called_agents": [AgentName.FAQ_AGENT],
             "answer": "três perfis",
             "sources": ["zera_overview.pdf#p2"],
         }
+        faq_agent.ainvoke.assert_called_once_with({"messages": "quais perfis existem?"})
 
 
 class TestMakeRetrieveContextTool:

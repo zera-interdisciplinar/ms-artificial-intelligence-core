@@ -1,6 +1,7 @@
+import asyncio
 import json
 from typing import cast
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 from langchain.messages import HumanMessage
 
@@ -40,30 +41,30 @@ class TestJudgeFateDecision:
 class TestJudgeFunc:
     def test_increments_judge_attempts(self):
         judge_agent = MagicMock()
-        judge_agent.invoke.return_value = {
+        judge_agent.ainvoke = AsyncMock(return_value={
             "messages": [MagicMock(content=json.dumps({"approved": True, "discrepancy": None}))]
-        }
+        })
         judge_func = make_judge_func(judge_agent)
 
-        result = judge_func(_state())
+        result = asyncio.run(judge_func(_state()))
 
         assert result["judge_attempts"] == 1
         assert result["approved"] is True
 
     def test_keeps_formatted_response_when_approved(self):
         judge_agent = MagicMock()
-        judge_agent.invoke.return_value = {
+        judge_agent.ainvoke = AsyncMock(return_value={
             "messages": [MagicMock(content=json.dumps({"approved": True, "discrepancy": None}))]
-        }
+        })
         judge_func = make_judge_func(judge_agent)
 
-        result = judge_func(_state())
+        result = asyncio.run(judge_func(_state()))
 
         assert "formatted_response" not in result
 
     def test_resets_downstream_fields_when_rejected_with_attempts_left(self):
         judge_agent = MagicMock()
-        judge_agent.invoke.return_value = {
+        judge_agent.ainvoke = AsyncMock(return_value={
             "messages": [
                 MagicMock(
                     content=json.dumps(
@@ -71,10 +72,10 @@ class TestJudgeFunc:
                     )
                 )
             ]
-        }
+        })
         judge_func = make_judge_func(judge_agent)
 
-        result = judge_func(_state(judge_attempts=0))
+        result = asyncio.run(judge_func(_state(judge_attempts=0)))
 
         assert result["approved"] is False
         assert result["discrepancy"] == "response_omits_data"
@@ -89,7 +90,7 @@ class TestJudgeFunc:
 
     def test_does_not_reset_fields_when_rejected_and_attempts_exhausted(self):
         judge_agent = MagicMock()
-        judge_agent.invoke.return_value = {
+        judge_agent.ainvoke = AsyncMock(return_value={
             "messages": [
                 MagicMock(
                     content=json.dumps(
@@ -97,10 +98,10 @@ class TestJudgeFunc:
                     )
                 )
             ]
-        }
+        })
         judge_func = make_judge_func(judge_agent)
 
-        result = judge_func(_state(judge_attempts=MAX_JUDGE_ATTEMPTS - 1))
+        result = asyncio.run(judge_func(_state(judge_attempts=MAX_JUDGE_ATTEMPTS - 1)))
 
         assert result["approved"] is False
         assert "formatted_response" not in result

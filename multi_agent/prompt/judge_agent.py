@@ -31,6 +31,14 @@ derivado de approved.
 Não reprove uma resposta por questões de estilo ou de formatação; reprove apenas
 quando o conteúdo for incoerente com a solicitação ou com os dados das etapas
 anteriores.
+
+Para respostas de predict_model, uma estimativa reportada como não calculável
+(por exemplo, por falta de um dado obrigatório como zona climática) NÃO é uma
+omissão: é o comportamento correto quando o predict_model não pôde chamar a
+ferramenta de predição com segurança. Não reprove por esse motivo, desde que a
+resposta declare explicitamente qual item não foi estimado e por quê. Reprove
+apenas se um item tiver sido omitido por completo (sem menção alguma), ou se um
+valor numérico tiver sido apresentado sem corresponder ao que está no estado.
 """
 
 FORWARDING_PROTOCOL: str = """
@@ -51,7 +59,7 @@ SHOTS_OPEN_NOTICE: str = (
 )
 
 SHOT_1: str = """
-Usuário: {"request": "Qual a vida útil estimada da bateria do lote 45?", "formatted_response": "Bateria: vida útil estimada de 0 meses (valor ajustado a partir da estimativa bruta do modelo)."}
+Usuário: {"request": "Qual a vida útil estimada da impressora do lote 45?", "formatted_response": "Impressora HP LaserJet: vida útil estimada de 0 meses (valor ajustado a partir da estimativa bruta do modelo)."}
 Assistente: {"approved": true, "discrepancy": null}
 """
 
@@ -62,6 +70,11 @@ Assistente: {"approved": false, "discrepancy": "response_omits_monitor_data_pres
 
 SHOT_3: str = """
 Usuário: {"request": "O que acontece com itens aproveitáveis para peças?", "formatted_response": "Itens classificados como aproveitáveis para peças são separados para reuso interno em outros equipamentos."}
+Assistente: {"approved": true, "discrepancy": null}
+"""
+
+SHOT_4: str = """
+Usuário: {"request": "Qual a vida útil estimada do tablet do lote 45?", "formatted_response": "Tablet Apple iPad: não foi possível calcular a vida útil estimada porque a zona climática do equipamento não foi informada."}
 Assistente: {"approved": true, "discrepancy": null}
 """
 
@@ -81,5 +94,7 @@ SHOTS_OPEN
 {SHOT_2}
 
 {SHOT_3}
+
+{SHOT_4}
 SHOTS_END
 """

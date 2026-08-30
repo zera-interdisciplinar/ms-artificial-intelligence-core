@@ -21,7 +21,7 @@ spec:
     spec:
       containers:
       - name: ms-artificial-intelligence-core
-        image: us-central1-docker.pkg.dev/zera1405/repo/ms-artificial-intelligence-core:IMAGE_TAG
+        image: southamerica-east1-docker.pkg.dev/zera-506513/repo/ms-artificial-intelligence-core:IMAGE_TAG
         imagePullPolicy: Always
         ports:
         - containerPort: 8000
@@ -53,6 +53,13 @@ spec:
           value: "8000"
         - name: APP_HOST
           value: "0.0.0.0"
+        - name: FAQ_PDF_PATH
+          value: "multi_agent/agents/data/faq.pdf"
+        - name: PREDICT_MODEL_MCP_URL
+          valueFrom:
+            secretKeyRef:
+              name: ms-artificial-intelligence-core-secrets
+              key: PREDICT_MODEL_MCP_URL
         - name: MONGO_URI
           valueFrom:
             secretKeyRef:

@@ -1,6 +1,6 @@
 """FastAPI application entrypoint for the Zera ms-artificial-intelligence-core service."""
 
-from logger.logger import logger
+from logger.logger import Logger
 from config.environments import Environments
 from _internal.mongo.setup import Repository
 
@@ -19,7 +19,7 @@ from multi_agent.service import MultiAgentService
 # RouterAPI imports
 from _internal.api.router import RouterAPI
 
-myLogger = logger()
+myLogger = Logger()
 myLogger.Info("Booting up ms-artificial-intelligence-core service")
 
 envs = Environments()

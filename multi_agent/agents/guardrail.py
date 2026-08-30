@@ -1,3 +1,7 @@
+from typing import Any
+
+from langgraph.graph.state import CompiledStateGraph
+
 from ..entity import State, AgentName
 from .message_utils import parse_json_message
 from langchain.messages import HumanMessage, RemoveMessage
@@ -9,12 +13,12 @@ from datetime import datetime, timezone
 from multi_agent.entity import Message, Role
 from multi_agent.multi_agent import IMultiAgentRepository
 
-from logger.logger import logger
+from logger.logger import Logger
 
 # ==============================================
 # GENERAL CONSTANTS
 # ==============================================
-PII_REGEX = [
+PII_REGEX: list[tuple[str, str]] = [
     ("CPF", r"\b\d{3}\.?\d{3}\.?\d{3}-?\d{2}\b"),
     ("CNPJ", r"\b\d{2}\.?\d{3}\.?\d{3}/?\d{4}-?\d{2}\b"),
     ("RG", r"\b\d{1,2}\.?\d{3}\.?\d{3}-?[\dXx]\b"),
@@ -42,8 +46,19 @@ class Guardrail:
         """
         Class that holds the guardrail_in and guardrail_out agents and the functions that use them.
         """
-        
-        def __init__(self, guardrail_in_agent, guardrail_out_agent, repository: IMultiAgentRepository, logger: logger):
+
+        guardrail_in_agent: CompiledStateGraph
+        guardrail_out_agent: CompiledStateGraph
+        repository: IMultiAgentRepository
+        logger: Logger
+
+        def __init__(
+            self,
+            guardrail_in_agent: CompiledStateGraph,
+            guardrail_out_agent: CompiledStateGraph,
+            repository: IMultiAgentRepository,
+            logger: Logger,
+        ) -> None:
                 self.guardrail_in_agent = guardrail_in_agent
                 self.guardrail_out_agent = guardrail_out_agent
                 self.repository = repository
@@ -52,7 +67,7 @@ class Guardrail:
         # ==============================================
         # GUARDRAIL IN FUNCTIONS
         # ==============================================
-        def guardrail_in_func(self, state: State, config: RunnableConfig) -> dict:
+        async def guardrail_in_func(self, state: State, config: RunnableConfig) -> dict[str, Any]:
                 """
                 Function to handle the guardrail_in state. It works in this pipe: anonimize the user input + make the PII map -> use llm to classify the user input as safe or unsafe -> if unsafe, block the user input and return the reason, otherwise, return the user input to the orchestrator.
                 """
@@ -62,6 +77,7 @@ class Guardrail:
                 assert original_message_id is not None
 
                 user_input = original_message.content  # get the last message from the user
+                assert isinstance(user_input, str), "guardrail_in only supports plain-text message content"
 
                 self.logger.Debug(f"Guardrail in: received message id={original_message_id}")
                 self.logger.Debug(f"Guardrail in: original content preview={user_input}")
@@ -75,7 +91,7 @@ class Guardrail:
 
                 # call the guardrail_in_agent to classify the user input as safe or unsafe
                 self.logger.Info("Guardrail in: invoking guardrail_in_agent for classification")
-                guardrail_in_response = self.guardrail_in_agent.invoke(
+                guardrail_in_response = await self.guardrail_in_agent.ainvoke(
                     {"messages": [masked_message]}
                 )
 
@@ -83,7 +99,7 @@ class Guardrail:
 
                 classification = parse_json_message(guardrail_in_response["messages"][-1].content)
 
-                configurable = config.get("configurable") or {}
+                configurable: dict[str, Any] = config.get("configurable") or {}
 
                 # saves the message only if it is not blocked, otherwise, it will be blocked and not saved in the database.
                 if not classification["blocked"]:
@@ -110,11 +126,11 @@ class Guardrail:
                     "current_request": anonimized_input,
                 }
 
-        def _remove_pii_from_text(self, text) -> tuple[str, dict]:
+        def _remove_pii_from_text(self, text: str) -> tuple[str, dict[str, str]]:
                 """
                 Function to remove PII from the text and return pii_map.
                 """
-                pii_map = dict()
+                pii_map: dict[str, str] = {}
                 new_text = text
 
                 for pii, regex in PII_REGEX:
@@ -139,15 +155,16 @@ class Guardrail:
         # ==============================================
         # GUARDRAIL OUT FUNCTIONS
         # ==============================================
-        def guardrail_out_func(self, state: State) -> dict:
+        async def guardrail_out_func(self, state: State) -> dict[str, Any]:
                 """
                 Function to handle the guardrail_out state. It works in this pipe: last validation of the response by the guardrail_out_agent -> retreive the PII from the response using the PII map -> return the response to the user.
                 """
                 formatted_response = state["formatted_response"]
+                assert formatted_response is not None, "formatted_response must be set before guardrail_out runs"
 
                 # call the guardrail_out_agent to validate the formatted response as safe or unsafe
                 self.logger.Info("Guardrail out: invoking guardrail_out_agent for final validation")
-                guardrail_out_response = self.guardrail_out_agent.invoke(
+                guardrail_out_response = await self.guardrail_out_agent.ainvoke(
                     {"messages": [HumanMessage(content=json.dumps({"formatted_response": formatted_response}))]}
                 )
 
@@ -175,7 +192,7 @@ class Guardrail:
                     "final_response": final_response,
                 }
 
-        def _retreive_pii_from_text(self, text, pii_map: dict) -> str:
+        def _retreive_pii_from_text(self, text: str, pii_map: dict[str, str]) -> str:
                 """
                 Function to retreive PII from the text using the pii_map.
                 """

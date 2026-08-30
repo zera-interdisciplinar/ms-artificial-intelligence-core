@@ -11,30 +11,34 @@ HOST ?= 0.0.0.0
 PORT ?= 8000
 COVERAGE_MIN ?= 80
 
-.PHONY: help install test test-cov run dev up up-debug down logs restart clean
+.PHONY: help install test test-integration test-cov run dev up up-debug down logs restart clean
 
 help:
 	@echo "Available targets:"
-	@echo "  install    Install project dependencies"
-	@echo "  test       Run the test suite"
-	@echo "  test-cov   Run tests with coverage"
-	@echo "  run        Start the API server"
-	@echo "  dev        Start the API server with reload"
-	@echo "  up         Start docker-compose services"
-	@echo "  up-debug   Start docker-compose services in detached mode for debugging"
-	@echo "  down       Stop docker-compose services"
-	@echo "  logs       Follow docker-compose logs for mongo"
-	@echo "  restart    Restart docker-compose services"
-	@echo "  clean      Remove local caches and coverage artifacts"
+	@echo "  install          Install project dependencies"
+	@echo "  test             Run the unit test suite (excludes integration tests)"
+	@echo "  test-integration Run the integration test suite (hits real external services)"
+	@echo "  test-cov         Run unit tests with coverage"
+	@echo "  run              Start the API server"
+	@echo "  dev              Start the API server with reload"
+	@echo "  up               Start docker-compose services"
+	@echo "  up-debug         Start docker-compose services in detached mode for debugging"
+	@echo "  down             Stop docker-compose services"
+	@echo "  logs             Follow docker-compose logs for mongo"
+	@echo "  restart          Restart docker-compose services"
+	@echo "  clean            Remove local caches and coverage artifacts"
 
 install:
 	$(PIP) install -r requirements.txt
 
 test:
-	$(PYTEST)
+	$(PYTEST) -m "not integration"
+
+test-integration:
+	$(PYTEST) -m integration -v
 
 coverage:
-	$(PYTEST) --cov=. --cov-report=xml --cov-fail-under=$(COVERAGE_MIN)
+	$(PYTEST) -m "not integration" --cov=. --cov-report=xml --cov-fail-under=$(COVERAGE_MIN)
 
 run:
 	$(UVICORN) $(APP_MODULE) --host $(HOST) --port $(PORT)

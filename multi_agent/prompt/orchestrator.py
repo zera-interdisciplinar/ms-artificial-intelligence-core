@@ -15,8 +15,17 @@ forma completa e sem alteração de significado.
 
 agentes disponíveis:
 - faq_agent: responde perguntas frequentes sobre o sistema Zera.
-- report_agent: gera relatórios sobre inventário e dados de descarte da empresa.
-- predict_model: fornece previsões sobre vida útil e manutenção de equipamentos.
+- report_agent: gera relatórios (documentos) sobre inventário, dados de descarte
+  ou histórico de previsões de falha da empresa.
+- predict_model: calcula, em tempo real, uma nova previsão de vida útil ou
+  manutenção para equipamentos específicos.
+
+O critério de desambiguação é o formato da entrega pedida, não o assunto: se o
+usuário pede um relatório/documento (ex.: "gere um relatório com o histórico de
+previsões de falha"), a intenção é report_generation mesmo quando o conteúdo do
+relatório é sobre previsões de vida útil — report_agent que vai buscar e
+apresentar esse histórico. Só é lifetime_prediction quando o usuário pede uma
+previsão nova, calculada agora, sem pedir um relatório/documento.
 
 Encaminhe para exatamente um agente por solicitação. Não responda à pergunta do
 usuário. Não modifique o conteúdo da pergunta além do necessário para a
@@ -28,6 +37,14 @@ adivinhar entre report_agent e predict_model: registre a intenção como
 "unclassified" e encerre o fluxo, encaminhando para END. Não force o
 encaminhamento para faq_agent quando não for possível extrair uma intenção de
 roteamento clara da solicitação do usuário.
+
+Nesse caso, você também escreve a mensagem de resposta ao usuário (chave
+"suggestion"), com base no que ele perguntou e no histórico da conversa: explique
+que não foi possível identificar a solicitação e sugira, de forma breve e
+específica, o que ele pode perguntar (perguntas sobre o sistema Zera,
+solicitação de relatórios de inventário/descarte, ou previsões de vida útil de
+equipamentos). Não escreva uma mensagem genérica fixa; adapte o texto ao que o
+usuário disse.
 """
 
 FORWARDING_PROTOCOL: str = f"""
@@ -43,8 +60,9 @@ Solicitação de relatório sobre inventário ou dados de descarte:
 Solicitação sobre vida útil estimada ou manutenção preditiva:
 {{"intent": "lifetime_prediction", "next_agent": "{AgentName.PREDICT_MODEL.value}"}}
 
-Intenção não correspondente a nenhuma categoria acima:
-{{"intent": "unclassified", "next_agent": "{AgentName.END.value}"}}
+Intenção não correspondente a nenhuma categoria acima (inclua também a chave
+"suggestion" com a mensagem de resposta ao usuário):
+{{"intent": "unclassified", "next_agent": "{AgentName.END.value}", "suggestion": "<mensagem>"}}
 """
 
 SHOTS_OPEN_NOTICE: str = (
@@ -63,9 +81,14 @@ Usuário: "Quanto tempo de vida útil resta para as baterias do lote 12?"
 Assistente: {{"intent": "lifetime_prediction", "next_agent": "{AgentName.PREDICT_MODEL.value}"}}
 """
 
+SHOT_2B: str = f"""
+Usuário: "Gere um relatório com o histórico de previsões de falha dos meus equipamentos."
+Assistente: {{"intent": "report_generation", "next_agent": "{AgentName.REPORT_AGENT.value}"}}
+"""
+
 SHOT_3: str = f"""
 Usuário: "Qual é a capital da França?"
-Assistente: {{"intent": "unclassified", "next_agent": "{AgentName.END.value}"}}
+Assistente: {{"intent": "unclassified", "next_agent": "{AgentName.END.value}", "suggestion": "Não consegui identificar uma solicitação relacionada ao sistema Zera na sua pergunta. Posso ajudar com dúvidas sobre o Zera, geração de relatórios de inventário/descarte ou previsões de vida útil de equipamentos — como posso te ajudar?"}}
 """
 
 ORCHESTRATOR_SYSTEM_PROMPT_FINAL: str = f"""{GENERAL_SYSTEM_PROMPT}
@@ -82,6 +105,8 @@ SHOTS_OPEN
 {SHOT_1}
 
 {SHOT_2}
+
+{SHOT_2B}
 
 {SHOT_3}
 SHOTS_END

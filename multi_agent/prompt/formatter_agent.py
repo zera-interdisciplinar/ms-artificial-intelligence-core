@@ -20,6 +20,13 @@ essas responsabilidades são de judge_agent e guardrail_out, respectivamente. N�
 chame ferramentas externas; a formatação opera apenas sobre os dados já presentes
 no estado.
 
+Para itens vindos de predict_model com estimated_remaining_months igual a
+null, NÃO omita o item nem invente um número: informe explicitamente que a
+estimativa não pôde ser calculada para aquele item e inclua o motivo em
+linguagem natural, com base em adjustment_reason (ex.: dado de zona climática
+não informado). Para itens com adjusted igual a true e
+estimated_remaining_months numérico, mencione que o valor foi ajustado.
+
 Sua saída é avaliada por judge_agent e não retorna para você: não há uma segunda
 tentativa de formatação. Inclua todo o conteúdo relevante presente no estado, pois
 uma omissão resultará na reprovação da resposta e no encerramento do fluxo.
@@ -44,13 +51,18 @@ Assistente: {"formatted_response": "Itens classificados como aproveitáveis para
 """
 
 SHOT_2: str = """
-Usuário (estado de predict_model): {"predictions": [{"item": "Notebook", "estimated_remaining_months": 8, "adjusted": false, "adjustment_reason": null}, {"item": "Bateria", "estimated_remaining_months": 0, "adjusted": true, "adjustment_reason": "raw_estimate_negative_clamped_to_zero_per_configured_rule"}]}
-Assistente: {"formatted_response": "Notebook: vida útil estimada de 8 meses.\\nBateria: vida útil estimada de 0 meses (valor ajustado a partir da estimativa bruta do modelo)."}
+Usuário (estado de predict_model): {"predictions": [{"item": "Notebook Dell Latitude 5420", "estimated_remaining_months": 8, "adjusted": false, "adjustment_reason": null}, {"item": "Impressora HP LaserJet", "estimated_remaining_months": 0, "adjusted": true, "adjustment_reason": "raw_estimate_negative_clamped_to_zero_per_configured_rule"}]}
+Assistente: {"formatted_response": "Notebook Dell Latitude 5420: vida útil estimada de 8 meses.\\nImpressora HP LaserJet: vida útil estimada de 0 meses (valor ajustado a partir da estimativa bruta do modelo)."}
 """
 
 SHOT_3: str = """
 Usuário (estado de report_agent): {"report_html": "<!DOCTYPE html><html lang=\\"pt-BR\\"><head><meta charset=\\"utf-8\\" /><title>Relatório</title></head><body><header><h1>Relatório de Descarte — Lote 45</h1></header><main><p>O Lote 45 contém 12 notebooks classificados como descartáveis.</p></main><footer><p>Relatório gerado a partir dos dados de inventário registrados no sistema Zera.</p></footer></body></html>"}
 Assistente: {"formatted_response": "Relatório de Descarte — Lote 45\\n\\nO Lote 45 contém 12 notebooks classificados como descartáveis.\\n\\nRelatório gerado a partir dos dados de inventário registrados no sistema Zera."}
+"""
+
+SHOT_4: str = """
+Usuário (estado de predict_model): {"predictions": [{"item": "Tablet Apple iPad", "estimated_remaining_months": null, "adjusted": true, "adjustment_reason": "climate_zone_not_provided"}]}
+Assistente: {"formatted_response": "Tablet Apple iPad: não foi possível calcular a vida útil estimada porque a zona climática do equipamento não foi informada."}
 """
 
 FORMATTER_AGENT_SYSTEM_PROMPT_FINAL: str = f"""{GENERAL_SYSTEM_PROMPT}
@@ -69,5 +81,7 @@ SHOTS_OPEN
 {SHOT_2}
 
 {SHOT_3}
+
+{SHOT_4}
 SHOTS_END
 """

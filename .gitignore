@@ -25,4 +25,12 @@ Thumbs.db
 *.pyc.*
 
 # ambiente virtual
-zera-ai-core/ 
+zera-ai-core/
+
+# AI context
+.claude
+CLAUDE.md
+.mcp.json
+# Added by code-review-graph
+.code-review-graph/
+.serena
