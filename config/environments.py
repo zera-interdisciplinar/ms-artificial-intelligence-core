@@ -27,7 +27,7 @@ class Environments:
     # Database
     MONGO_URI: str
     MONGO_DB_NAME: str
-    MONGO_USERNAME: str
+    MONGO_USERNAME: str | None
     MONGO_PASSWORD: str | None
 
     # FAQ
@@ -56,7 +56,7 @@ class Environments:
         # Database
         self.MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
         self.MONGO_DB_NAME = os.getenv("MONGO_DB_NAME", "ms-artificial-intelligence-core")
-        self.MONGO_USERNAME = os.getenv("MONGO_USERNAME", "root")
+        self.MONGO_USERNAME = os.getenv("MONGO_USERNAME")
         self.MONGO_PASSWORD = os.getenv("MONGO_PASSWORD")
 
         # FAQ

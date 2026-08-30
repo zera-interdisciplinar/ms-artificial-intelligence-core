@@ -25,10 +25,9 @@ def test_defaults_are_applied_when_env_is_empty(clean_env):
     assert envs.APP_ENV == "DEV"
     assert envs.MONGO_URI == "mongodb://localhost:27017"
     assert envs.MONGO_DB_NAME == "ms-artificial-intelligence-core"
-    assert envs.MONGO_USERNAME == "root"
 
 
-@pytest.mark.parametrize("name", ["GEMINI_API_KEY", "MONGO_PASSWORD"])
+@pytest.mark.parametrize("name", ["GEMINI_API_KEY", "MONGO_PASSWORD", "MONGO_USERNAME"])
 def test_secrets_have_no_default(clean_env, name):
     """Secrets must stay unset rather than fall back to a hardcoded value."""
     assert getattr(Environments(), name) is None
