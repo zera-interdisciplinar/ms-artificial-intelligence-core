@@ -7,7 +7,10 @@ the plain text so callers can safely json.loads() it regardless of provider.
 """
 
 import json
+import re
 from typing import Any
+
+_CODE_FENCE_RE = re.compile(r"^```(?:json)?\s*|\s*```$", re.MULTILINE)
 
 
 def extract_text(content: Any) -> str:
@@ -29,4 +32,5 @@ def extract_text(content: Any) -> str:
 def parse_json_message(content: Any) -> Any:
     """Extracts plain text from message content and parses it as JSON."""
 
-    return json.loads(extract_text(content))
+    text = _CODE_FENCE_RE.sub("", extract_text(content)).strip()
+    return json.loads(text)

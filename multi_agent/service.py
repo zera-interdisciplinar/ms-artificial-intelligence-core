@@ -343,9 +343,10 @@ class MultiAgentService(IMultiAgentService):
         )
         
         # the flow only leaves guardrail_in when blocked=False there; if blocked=True and
-        # formatted_response was never set, the flow stopped at guardrail_in, so we don't
-        # save a final message for it.
-        stopped_at_guardrail_in = end_state["blocked"] and end_state.get("formatted_response") is None
+        # the orchestrator was never reached, the flow stopped at guardrail_in, so we don't
+        # save a final message for it. blocked=True set later on (orchestrator's unclassified
+        # intent, guardrail_out) still produces a message worth saving.
+        stopped_at_guardrail_in = end_state["blocked"] and AgentName.ORCHESTRATOR not in end_state["called_agents"]
 
         if not stopped_at_guardrail_in:
             

@@ -9,12 +9,6 @@ from logger.logger import Logger
 # module-level logger instance
 _logger = Logger()
 
-UNCLASSIFIED_INTENT_MESSAGE: str = (
-    "Não consegui identificar sua solicitação. Poderia reformular sua pergunta "
-    "com mais detalhes sobre o que você precisa?"
-)
-
-
 def make_orchestrator_func(orchestrator_agent: CompiledStateGraph) -> GraphNodeFunc:
     """
     Wraps orchestrator_agent so its JSON output is parsed and projected into intent/next_agent.
@@ -37,7 +31,9 @@ def make_orchestrator_func(orchestrator_agent: CompiledStateGraph) -> GraphNodeF
         }
 
         if next_agent == AgentName.END:
-            result["final_response"] = UNCLASSIFIED_INTENT_MESSAGE
+            result["final_response"] = classification["suggestion"]
+            result["blocked"] = True
+            result["blocked_reason"] = "unclassified_intent"
 
         return result
 

@@ -6,7 +6,6 @@ from multi_agent.entity import AgentName, State
 from multi_agent.agents.orchestrator import (
     orchestrator_fate_decision,
     make_orchestrator_func,
-    UNCLASSIFIED_INTENT_MESSAGE,
 )
 from multi_agent.prompt.orchestrator import ORCHESTRATOR_SYSTEM_PROMPT_FINAL
 
@@ -37,9 +36,10 @@ class TestOrchestratorFunc:
         agent.ainvoke = AsyncMock(return_value={"messages": [MagicMock(content=content)]})
         return agent
 
-    def test_sets_final_response_when_next_agent_is_end(self):
+    def test_sets_final_response_from_agent_suggestion_when_next_agent_is_end(self):
         agent = self._make_agent(
-            '{"intent": "unclassified", "next_agent": "%s"}' % AgentName.END.value
+            '{"intent": "unclassified", "next_agent": "%s", "suggestion": "posso ajudar com dúvidas sobre o Zera"}'
+            % AgentName.END.value
         )
         orchestrator_func = make_orchestrator_func(agent)
 
@@ -47,7 +47,9 @@ class TestOrchestratorFunc:
         result = asyncio.run(orchestrator_func(state))
 
         assert result["next_agent"] == AgentName.END
-        assert result["final_response"] == UNCLASSIFIED_INTENT_MESSAGE
+        assert result["final_response"] == "posso ajudar com dúvidas sobre o Zera"
+        assert result["blocked"] is True
+        assert result["blocked_reason"] == "unclassified_intent"
 
     def test_does_not_set_final_response_for_regular_routing(self):
         agent = self._make_agent(
