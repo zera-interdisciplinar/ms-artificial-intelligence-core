@@ -34,3 +34,13 @@ def parse_json_message(content: Any) -> Any:
 
     text = _CODE_FENCE_RE.sub("", extract_text(content)).strip()
     return json.loads(text)
+
+
+def with_preferences(text: str, preferences: str | None) -> str:
+    """Prefixes a node's LLM input with the user's long-term preferences, when
+    any are known for this session. Used instead of a per-agent prompt change
+    so every consumer (orchestrator, faq, report) shares one code path."""
+
+    if not preferences:
+        return text
+    return f"[Preferências de longo prazo do usuário: {preferences}]\n\n{text}"

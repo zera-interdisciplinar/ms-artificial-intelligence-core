@@ -9,7 +9,7 @@ class TestIMultiAgentRepository:
         assert isinstance(MultiAgentRepository(), IMultiAgentRepository)
 
     def test_declares_the_methods_the_service_depends_on(self):
-        for method in ("setup", "save_message", "retrieve_messages", "remove_thread"):
+        for method in ("setup", "save_message", "retrieve_messages", "get_preferences", "upsert_preferences"):
             assert callable(getattr(IMultiAgentRepository, method))
 
     def test_an_object_missing_a_method_does_not_satisfy_the_protocol(self):

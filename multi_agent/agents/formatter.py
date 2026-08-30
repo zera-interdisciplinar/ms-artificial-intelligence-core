@@ -31,6 +31,8 @@ def make_formatter_func(formatter_agent: CompiledStateGraph) -> GraphNodeFunc:
         predictions = state.get("predictions")
         if predictions:
             source_state["predictions"] = [p.model_dump() for p in predictions]
+        if state.get("user_preferences"):
+            source_state["user_preferences"] = state["user_preferences"]
         _logger.Debug(f"Formatter input state={source_state}")
 
         response = await formatter_agent.ainvoke(

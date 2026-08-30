@@ -11,7 +11,7 @@ from typing import Any, Optional
 from config.environments import Environments
 
 from ..entity import State, AgentName
-from .message_utils import parse_json_message
+from .message_utils import parse_json_message, with_preferences
 from logger.logger import Logger
 from pydantic import SecretStr
 
@@ -92,7 +92,8 @@ class FAQ:
         Wraps faq_agent so its JSON output is parsed and projected into answer/sources.
         """
         assert self.faq_agent is not None, "faq_agent is not set; call setup() and assign faq_agent before invoking"
-        response = await self.faq_agent.ainvoke({"messages": state["current_request"]})
+        request = with_preferences(state["current_request"], state.get("user_preferences"))
+        response = await self.faq_agent.ainvoke({"messages": request})
         self.logger.Info("FAQ agent invoked")
 
         self.logger.Debug(f"FAQ raw response={response['messages'][-1].content}")

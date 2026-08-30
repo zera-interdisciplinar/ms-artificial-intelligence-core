@@ -1,4 +1,5 @@
 import asyncio
+import json
 from typing import cast
 
 from langchain.messages import HumanMessage
@@ -7,7 +8,7 @@ from langchain_mcp_adapters.client import MultiServerMCPClient
 
 from multi_agent.multi_agent import IMultiAgentRepository, IMultiAgentService
 
-from .entity import Message, AgentResponse, State, Role
+from .entity import Message, AgentResponse, State, Role, UserPreferences
 from uuid import UUID, uuid4
 from datetime import datetime, timezone
 
@@ -33,9 +34,12 @@ from .prompt.faq_agent import FAQ_AGENT_SYSTEM_PROMPT_FINAL
 from .prompt.formatter_agent import FORMATTER_AGENT_SYSTEM_PROMPT_FINAL
 from .prompt.judge_agent import JUDGE_AGENT_SYSTEM_PROMPT_FINAL
 from .prompt.guardrail_out import GUARDRAIL_OUT_SYSTEM_PROMPT_FINAL
+from .prompt.preferences_agent import PREFERENCES_AGENT_SYSTEM_PROMPT_FINAL
 
-# checkpointer
+# checkpointer / session cache
 from langgraph.checkpoint.memory import MemorySaver
+from .session import Session, SessionStore, message_to_base_message, render_preferences
+from .agents.message_utils import parse_json_message
 
 #langchain/langgraph imports
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -65,16 +69,19 @@ from typing import Optional
 class MultiAgentService(IMultiAgentService):
     """Concrete implementation of the multi-agent service."""
 
-    graph: StateGraph[State]
-    __compiled_graph: Optional[CompiledStateGraph[State]] = None
+    graph: Optional[StateGraph[State]] = None
+    compiled_graph: Optional[CompiledStateGraph[State]] = None
+    checkpointer: MemorySaver
     guardrail: Guardrail
     faq: FAQ
+    preferences_agent: CompiledStateGraph
 
     repository: IMultiAgentRepository
     envs: Environments
     logger: Logger
     pdf_renderer: PdfRenderer
     storage_service: IStorageService
+    session_store: SessionStore
 
     def __init__(
         self,
@@ -89,6 +96,7 @@ class MultiAgentService(IMultiAgentService):
         self.logger = logger
         self.pdf_renderer = pdf_renderer
         self.storage_service = storage_service
+        self.session_store = SessionStore(envs.SESSION_TTL_SECONDS)
 
     async def _fetch_predict_model_tools(self) -> list[BaseTool]:
         """
@@ -221,6 +229,11 @@ class MultiAgentService(IMultiAgentService):
 
         self.guardrail = Guardrail(guardrail_in_agent, guardrail_out_agent, self.repository, self.logger)
 
+        self.preferences_agent = create_agent(
+            model=llm_fast,
+            system_prompt=PREFERENCES_AGENT_SYSTEM_PROMPT_FINAL,
+        )
+
         # initializes the state graph
         new_graph = StateGraph(State)
 
@@ -276,63 +289,111 @@ class MultiAgentService(IMultiAgentService):
         new_graph.add_edge(AgentName.GUARDRAIL_OUT, AgentName.END)
 
         self.graph = new_graph
+        self.checkpointer = MemorySaver()
+        self.compiled_graph = new_graph.compile(checkpointer=self.checkpointer)
 
-        memory = MemorySaver()
-        self.__compiled_graph = new_graph.compile(checkpointer=memory)
+    def _hydrate_session(self, user_id: UUID, thread_id: UUID) -> Session:
+        """
+        Seeds the shared checkpointer's entry for a thread that isn't cached (first
+        turn, or cache expired) with Mongo data: recent messages and the user's
+        long-term preferences. The checkpointer and compiled graph are built once in
+        setup() and shared by every thread — thread_id in config is what partitions
+        state between them, so there's no saver or compile() per session here. Read
+        priority is always the cache — this only runs when the cache misses.
+        """
+        assert self.compiled_graph is not None, "graph must be compiled by setup() before hydrating a session"
+
+        self.logger.Info(f"Hydrating session for user_id: {user_id}, thread_id: {thread_id}")
+
+        history = self.repository.retrieve_messages(user_id, thread_id, limit=self.envs.SESSION_HISTORY_LIMIT)
+        preferences = self.repository.get_preferences(user_id)
+
+        config = {"configurable": {"user_id": user_id, "thread_id": thread_id}}
+        seed_state = cast(State, {
+            "messages": [message_to_base_message(m) for m in history],
+            "user_preferences": render_preferences(preferences) if preferences else None,
+        })
+        if history or preferences:
+            self.compiled_graph.update_state(config, seed_state)
+
+        session = Session(user_id=user_id, thread_id=thread_id)
+        self.session_store.put(session)
+        return session
+
+    async def _update_preferences(self, session: Session) -> None:
+        """
+        Runs once, fire-and-forget, when a session's TTL expires: summarizes the
+        whole conversation into long-term preferences (writing style, company
+        context, frequent requests). Never on the response critical path, and
+        never allowed to raise — a failure here must not affect anything else.
+        """
+        try:
+            history = self.repository.retrieve_messages(
+                session.user_id, session.thread_id, limit=self.envs.SESSION_HISTORY_LIMIT
+            )
+            if not history:
+                return
+
+            current = self.repository.get_preferences(session.user_id)
+            conversation = "\n".join(f"{m.role.value}: {m.content}" for m in history)
+
+            payload = {
+                "current_preferences": current.model_dump(mode="json", exclude={"user_id", "updated_at"}) if current else None,
+                "conversation": conversation,
+            }
+
+            response = await self.preferences_agent.ainvoke(
+                {"messages": [HumanMessage(content=json.dumps(payload))]}
+            )
+            extracted = parse_json_message(response["messages"][-1].content)
+
+            self.repository.upsert_preferences(
+                UserPreferences(
+                    user_id=session.user_id,
+                    writing_style=extracted.get("writing_style"),
+                    company_context=extracted.get("company_context"),
+                    frequent_requests=extracted.get("frequent_requests") or [],
+                    updated_at=datetime.now(timezone.utc),
+                )
+            )
+            self.logger.Info(f"Updated preferences for user_id: {session.user_id}")
+        except Exception as e:
+            self.logger.Error(f"Failed to update preferences for user_id: {session.user_id}", e)
 
     async def process_message(self, message: str, user_id: UUID, thread_id: UUID) -> AgentResponse:
         # certifies that the graph is already compiled
-        if self.__compiled_graph is None:
+        if self.compiled_graph is None:
             self.logger.Error("The multi-agent service is not set up. Please call the setup() method before processing messages.", MultiAgentServiceNotSetupException)
             raise MultiAgentServiceNotSetupException("The multi-agent service is not set up. Please call the setup() method before processing messages.")
-        
-        # initial state merges the last state from memory saver with the new one.
-        # the merge works in this way: if the value contains a reducer, it will be reduced with the new value, otherwise it will be replaced by the new value.
-        # we clear most of the values from the last state because they are procedural informations from each execution of the graph.
+
+        # certifies that the session is already in cache, or hydrates it from Mongo if it's not (first turn, or cache expired)
+        self.session_store.get(thread_id) or self._hydrate_session(user_id, thread_id)
+
+        # delta state: only the fields with a reducer (reset by an empty/zero value) plus the
+        # fields that a node may skip this turn and that would otherwise leak the previous
+        # turn's value through the checkpoint. Everything else (current_request, intent,
+        # next_agent, answer, formatted_response, final_response, user_preferences) is either
+        # always written by the node that reads it, or must survive across turns.
         initial_state = cast(
             State,
             {
                 "messages": [HumanMessage(content=message)],
                 "called_agents": [],
-
-                # routing
-                "next_agent": None,
-                "intent": None,
-
-                # guardrails
-                "blocked": False,
-                "blocked_reason": None,
-                "current_request": None,
-
-                # faq_agent
-                "answer": None,
-                "sources": [],
-
-                # report_agent
-                "report_html": None,
-
-                # predict_model
-                "predictions": [],
-
-                # formatter_agent
-                "formatted_response": None,
-
-                # judge_agent
-                "approved": None,
-                "discrepancy": None,
                 "judge_attempts": 0,
 
-                # guardrail_out
-                "final_response": None,
+                "blocked": False,
+                "blocked_reason": None,
+                "approved": None,
+                "discrepancy": None,
+                "report_html": None,
+                "predictions": [],
+                "sources": [],
             },
         )
-        
-        # executes the graph with the initial state and the user_id and thread_id as configurable parameters to get the last state of the graph.
-        # invoke() also retreives the last state from the memory saver and merges it with the initial state, so we can get the last state of the graph.
-        
+
         self.logger.Info(f"Processing message for user_id: {user_id}, thread_id: {thread_id}")
-        
-        end_state = await self.__compiled_graph.ainvoke(
+
+        end_state = await self.compiled_graph.ainvoke(
             initial_state,
             config = {
                 "configurable": {
@@ -341,7 +402,15 @@ class MultiAgentService(IMultiAgentService):
                 }
             }
         )
-        
+
+        # sweep sessions whose TTL expired: drop their entry from the shared
+        # checkpointer (otherwise it would never be freed) and update their
+        # preferences once, over the whole conversation, fire-and-forget so it
+        # never adds latency to this (or any) request.
+        for expired_session in self.session_store.sweep():
+            self.checkpointer.delete_thread(str(expired_session.thread_id))
+            asyncio.create_task(self._update_preferences(expired_session))
+
         # the flow only leaves guardrail_in when blocked=False there; if blocked=True and
         # the orchestrator was never reached, the flow stopped at guardrail_in, so we don't
         # save a final message for it. blocked=True set later on (orchestrator's unclassified
