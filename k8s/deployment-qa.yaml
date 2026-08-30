@@ -98,3 +98,10 @@ spec:
             secretKeyRef:
               name: ms-artificial-intelligence-core-secrets
               key: SUPABASE_BUCKET_NAME
+        - name: FAQ_PDF_PATH
+          value: "multi_agent/agents/data/faq.pdf"
+        - name: PREDICT_MODEL_MCP_URL
+          valueFrom:
+            secretKeyRef:
+              name: ms-artificial-intelligence-core-secrets
+              key: PREDICT_MODEL_MCP_URL
