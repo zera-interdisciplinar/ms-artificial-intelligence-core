@@ -10,6 +10,8 @@ import json
 import re
 from typing import Any
 
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
+
 _CODE_FENCE_RE = re.compile(r"^```(?:json)?\s*|\s*```$", re.MULTILINE)
 
 
@@ -44,3 +46,17 @@ def with_preferences(text: str, preferences: str | None) -> str:
     if not preferences:
         return text
     return f"[Preferências de longo prazo do usuário: {preferences}]\n\n{text}"
+
+
+def render_history(messages: list[BaseMessage], limit: int) -> str:
+    """Renders the last `limit` Human/AI turns as plain-text lines, for the one
+    agent (orchestrator) that resolves conversational references ("esse aí")
+    into a self-contained request. Other agents never see this — they get the
+    already-resolved current_request."""
+
+    turns = [
+        f"Usuário: {m.content}" if isinstance(m, HumanMessage) else f"Assistente: {m.content}"
+        for m in messages
+        if isinstance(m, (HumanMessage, AIMessage))
+    ]
+    return "\n".join(turns[-limit:])

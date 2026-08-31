@@ -126,7 +126,11 @@ class TestProcessMessage:
         service.repository.retrieve_messages.assert_called_once_with(
             USER_ID, THREAD_ID, limit=service.envs.SESSION_HISTORY_LIMIT
         )
-        compiled.update_state.assert_called_once()
+        # first call seeds the checkpoint on hydration; second feeds the assistant's
+        # reply back after the turn completes.
+        assert compiled.update_state.call_count == 2
+        hydration_args, hydration_kwargs = compiled.update_state.call_args_list[0]
+        assert hydration_args[1]["messages"][0].content == "oi"
 
     def test_renders_and_uploads_the_report_when_report_agent_was_called(self, service):
         _stub_graph(service, {
