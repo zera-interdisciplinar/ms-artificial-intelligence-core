@@ -3,11 +3,10 @@ Define the interface for multi-agent contracts and repository (interface).
 """
 
 from typing import Optional, Protocol, runtime_checkable
-from .entity import Message, AgentResponse, State
+from .entity import Message, AgentResponse, State, UserPreferences
 from uuid import UUID
 
 from langgraph.graph import StateGraph
-from langgraph.graph.state import CompiledStateGraph
 
 from _internal.mongo.setup import Repository
 
@@ -36,17 +35,25 @@ class IMultiAgentRepository(Protocol):
         self,
         user_id: UUID,
         thread_id: UUID,
+        limit: int = 50,
     ) -> list[Message]:
         """
-        Retrieve messages from the database for a given user and thread.
+        Retrieve the most recent messages for a given user and thread, oldest first.
         Raise RepositoryReadException if the retrieval fails.
         """
         ...
 
-    def remove_thread(self, user_id: UUID, thread_id: UUID) -> None:
+    def get_preferences(self, user_id: UUID) -> UserPreferences | None:
         """
-        Remove all messages from a given user and thread from the collection.
-        Raise RepositoryDeleteException if the removal fails.
+        Retrieve the long-term preferences for a given user, or None if never recorded.
+        Raise RepositoryReadException if the retrieval fails.
+        """
+        ...
+
+    def upsert_preferences(self, preferences: UserPreferences) -> None:
+        """
+        Insert or update the long-term preferences for a given user.
+        Raise RepositorySaveException if the save fails.
         """
         ...
 
@@ -56,8 +63,7 @@ class IMultiAgentService(Protocol):
     """Interface for the multi-agent service."""
 
     repository: IMultiAgentRepository
-    graph: StateGraph[State]
-    __compiled_graph: Optional[CompiledStateGraph[State]] = None
+    graph: Optional[StateGraph[State]]
 
     def setup(self) -> None:
         """

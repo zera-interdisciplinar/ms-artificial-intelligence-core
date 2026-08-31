@@ -30,6 +30,10 @@ estimated_remaining_months numérico, mencione que o valor foi ajustado.
 Sua saída é avaliada por judge_agent e não retorna para você: não há uma segunda
 tentativa de formatação. Inclua todo o conteúdo relevante presente no estado, pois
 uma omissão resultará na reprovação da resposta e no encerramento do fluxo.
+
+Se o estado incluir a chave opcional `user_preferences`, use-a apenas para ajustar
+o tom e o nível de detalhe da resposta (por exemplo, mais direta ou mais detalhada,
+conforme o estilo do usuário); nunca a use como fonte de conteúdo factual.
 """
 
 FORWARDING_PROTOCOL: str = """

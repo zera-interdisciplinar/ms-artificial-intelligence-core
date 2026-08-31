@@ -30,6 +30,10 @@ class Environments:
     MONGO_USERNAME: str | None
     MONGO_PASSWORD: str | None
 
+    # Session memory (per-thread MemorySaver cache)
+    SESSION_TTL_SECONDS: int
+    SESSION_HISTORY_LIMIT: int
+
     # FAQ
     FAQ_PDF_PATH: str
 
@@ -58,6 +62,10 @@ class Environments:
         self.MONGO_DB_NAME = os.getenv("MONGO_DB_NAME", "ms-artificial-intelligence-core")
         self.MONGO_USERNAME = os.getenv("MONGO_USERNAME")
         self.MONGO_PASSWORD = os.getenv("MONGO_PASSWORD")
+
+        # Session memory (per-thread MemorySaver cache)
+        self.SESSION_TTL_SECONDS = int(os.getenv("SESSION_TTL_SECONDS", "18000"))
+        self.SESSION_HISTORY_LIMIT = int(os.getenv("SESSION_HISTORY_LIMIT", "50"))
 
         # FAQ
         self.FAQ_PDF_PATH = os.getenv("FAQ_PDF_PATH", "multi_agent/agents/data/faq.pdf")

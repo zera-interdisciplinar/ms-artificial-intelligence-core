@@ -12,13 +12,13 @@ Tests usecases:
 - /multi-agent/process-message: Tests the ablity of a off-topic user message to be handled (blocked by guardrail_in)
 """
 
-from datetime import datetime, timezone
 from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
 from httpx import Response
-from multi_agent.entity import Message, AgentResponse
+from multi_agent.entity import AgentResponse
+from _internal.api.dto import ProcessMessageRequest
 
 pytestmark = pytest.mark.integration
 
@@ -78,7 +78,7 @@ def client() -> TestClient:
     # clear the collection if exists
     multi_agent_repository.setup(general_repository)
     multi_agent_repository.messageCollection.delete_many({})
-    multi_agent_repository.threadCollection.delete_many({})
+    multi_agent_repository.preferencesCollection.delete_many({})
     
     multi_agent_service = MultiAgentService(
         repository=multi_agent_repository,
@@ -109,12 +109,10 @@ def test_faq_agent(client: TestClient) -> None:
     """
     user_message = "What is the project zera?"
 
-    body: Message = Message(
+    body: ProcessMessageRequest = ProcessMessageRequest(
         user_id=_new_UUID(),
         thread_id=_new_UUID(),
-        role="user",
         content=user_message,
-        created_at=datetime.now(timezone.utc),
     )
 
     http_response: Response = client.post(
@@ -144,12 +142,10 @@ def test_predict_agent(client: TestClient) -> None:
         "uso intenso (nível 8)?"
     )
 
-    body: Message = Message(
+    body: ProcessMessageRequest = ProcessMessageRequest(
         user_id=_new_UUID(),
         thread_id=_new_UUID(),
-        role="user",
         content=user_message,
-        created_at=datetime.now(timezone.utc),
     )
 
     http_response: Response = client.post(
@@ -175,12 +171,10 @@ def test_report_agent(client: TestClient) -> None:
     """
     user_message = "Gere um relatório com o histórico de previsões de falha dos meus equipamentos."
 
-    body: Message = Message(
+    body: ProcessMessageRequest = ProcessMessageRequest(
         user_id=_new_UUID(),
         thread_id=_new_UUID(),
-        role="user",
         content=user_message,
-        created_at=datetime.now(timezone.utc),
     )
 
     http_response: Response = client.post(
@@ -207,12 +201,10 @@ def test_off_topic_agent(client: TestClient) -> None:
     """
     user_message = "Qual a receita de um bolo de chocolate?"
 
-    body: Message = Message(
+    body: ProcessMessageRequest = ProcessMessageRequest(
         user_id=_new_UUID(),
         thread_id=_new_UUID(),
-        role="user",
         content=user_message,
-        created_at=datetime.now(timezone.utc),
     )
 
     http_response: Response = client.post(
