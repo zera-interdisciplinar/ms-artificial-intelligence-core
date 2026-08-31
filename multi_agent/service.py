@@ -36,9 +36,9 @@ from .prompt.judge_agent import JUDGE_AGENT_SYSTEM_PROMPT_FINAL
 from .prompt.guardrail_out import GUARDRAIL_OUT_SYSTEM_PROMPT_FINAL
 from .prompt.preferences_agent import PREFERENCES_AGENT_SYSTEM_PROMPT_FINAL
 
-# checkpointer / session cache
+# checkpointer / thread cache
 from langgraph.checkpoint.memory import MemorySaver
-from .session import Session, SessionStore, message_to_base_message, render_preferences
+from .thread_cache import ThreadCacheEntry, ThreadCache, message_to_base_message, render_preferences
 from .agents.message_utils import parse_json_message
 
 #langchain/langgraph imports
@@ -81,7 +81,7 @@ class MultiAgentService(IMultiAgentService):
     logger: Logger
     pdf_renderer: PdfRenderer
     storage_service: IStorageService
-    session_store: SessionStore
+    thread_cache: ThreadCache
 
     def __init__(
         self,
@@ -96,7 +96,7 @@ class MultiAgentService(IMultiAgentService):
         self.logger = logger
         self.pdf_renderer = pdf_renderer
         self.storage_service = storage_service
-        self.session_store = SessionStore(envs.SESSION_TTL_SECONDS)
+        self.thread_cache = ThreadCache(envs.SESSION_TTL_SECONDS)
 
     async def _fetch_predict_model_tools(self) -> list[BaseTool]:
         """
@@ -292,18 +292,18 @@ class MultiAgentService(IMultiAgentService):
         self.checkpointer = MemorySaver()
         self.compiled_graph = new_graph.compile(checkpointer=self.checkpointer)
 
-    def _hydrate_session(self, user_id: UUID, thread_id: UUID) -> Session:
+    def _hydrate_thread(self, user_id: UUID, thread_id: UUID) -> ThreadCacheEntry:
         """
         Seeds the shared checkpointer's entry for a thread that isn't cached (first
         turn, or cache expired) with Mongo data: recent messages and the user's
         long-term preferences. The checkpointer and compiled graph are built once in
         setup() and shared by every thread — thread_id in config is what partitions
-        state between them, so there's no saver or compile() per session here. Read
+        state between them, so there's no saver or compile() per thread here. Read
         priority is always the cache — this only runs when the cache misses.
         """
-        assert self.compiled_graph is not None, "graph must be compiled by setup() before hydrating a session"
+        assert self.compiled_graph is not None, "graph must be compiled by setup() before hydrating a thread"
 
-        self.logger.Info(f"Hydrating session for user_id: {user_id}, thread_id: {thread_id}")
+        self.logger.Info(f"Hydrating thread for user_id: {user_id}, thread_id: {thread_id}")
 
         history = self.repository.retrieve_messages(user_id, thread_id, limit=self.envs.SESSION_HISTORY_LIMIT)
         preferences = self.repository.get_preferences(user_id)
@@ -316,25 +316,28 @@ class MultiAgentService(IMultiAgentService):
         if history or preferences:
             self.compiled_graph.update_state(config, seed_state)
 
-        session = Session(user_id=user_id, thread_id=thread_id)
-        self.session_store.put(session)
-        return session
+        entry = ThreadCacheEntry(user_id=user_id, thread_id=thread_id)
+        self.thread_cache.put(entry)
 
-    async def _update_preferences(self, session: Session) -> None:
+        self.logger.Info(f"Cached thread for user_id: {user_id}, thread_id: {thread_id} with {len(history)} messages and preferences: {preferences}")
+
+        return entry
+
+    async def _update_preferences(self, entry: ThreadCacheEntry) -> None:
         """
-        Runs once, fire-and-forget, when a session's TTL expires: summarizes the
-        whole conversation into long-term preferences (writing style, company
+        Runs once, fire-and-forget, when a thread's cache TTL expires: summarizes
+        the whole conversation into long-term preferences (writing style, company
         context, frequent requests). Never on the response critical path, and
         never allowed to raise — a failure here must not affect anything else.
         """
         try:
             history = self.repository.retrieve_messages(
-                session.user_id, session.thread_id, limit=self.envs.SESSION_HISTORY_LIMIT
+                entry.user_id, entry.thread_id, limit=self.envs.SESSION_HISTORY_LIMIT
             )
             if not history:
                 return
 
-            current = self.repository.get_preferences(session.user_id)
+            current = self.repository.get_preferences(entry.user_id)
             conversation = "\n".join(f"{m.role.value}: {m.content}" for m in history)
 
             payload = {
@@ -349,16 +352,16 @@ class MultiAgentService(IMultiAgentService):
 
             self.repository.upsert_preferences(
                 UserPreferences(
-                    user_id=session.user_id,
+                    user_id=entry.user_id,
                     writing_style=extracted.get("writing_style"),
                     company_context=extracted.get("company_context"),
                     frequent_requests=extracted.get("frequent_requests") or [],
                     updated_at=datetime.now(timezone.utc),
                 )
             )
-            self.logger.Info(f"Updated preferences for user_id: {session.user_id}")
+            self.logger.Info(f"Updated preferences for user_id: {entry.user_id}")
         except Exception as e:
-            self.logger.Error(f"Failed to update preferences for user_id: {session.user_id}", e)
+            self.logger.Error(f"Failed to update preferences for user_id: {entry.user_id}", e)
 
     async def process_message(self, message: str, user_id: UUID, thread_id: UUID) -> AgentResponse:
         # certifies that the graph is already compiled
@@ -366,8 +369,8 @@ class MultiAgentService(IMultiAgentService):
             self.logger.Error("The multi-agent service is not set up. Please call the setup() method before processing messages.", MultiAgentServiceNotSetupException)
             raise MultiAgentServiceNotSetupException("The multi-agent service is not set up. Please call the setup() method before processing messages.")
 
-        # certifies that the session is already in cache, or hydrates it from Mongo if it's not (first turn, or cache expired)
-        self.session_store.get(thread_id) or self._hydrate_session(user_id, thread_id)
+        # certifies that the thread is already in cache, or hydrates it from Mongo if it's not (first turn, or cache expired)
+        self.thread_cache.get(thread_id) or self._hydrate_thread(user_id, thread_id)
 
         # delta state: only the fields with a reducer (reset by an empty/zero value) plus the
         # fields that a node may skip this turn and that would otherwise leak the previous
@@ -403,13 +406,13 @@ class MultiAgentService(IMultiAgentService):
             }
         )
 
-        # sweep sessions whose TTL expired: drop their entry from the shared
+        # sweep threads whose cache TTL expired: drop their entry from the shared
         # checkpointer (otherwise it would never be freed) and update their
         # preferences once, over the whole conversation, fire-and-forget so it
         # never adds latency to this (or any) request.
-        for expired_session in self.session_store.sweep():
-            self.checkpointer.delete_thread(str(expired_session.thread_id))
-            asyncio.create_task(self._update_preferences(expired_session))
+        for expired_entry in self.thread_cache.sweep():
+            self.checkpointer.delete_thread(str(expired_entry.thread_id))
+            asyncio.create_task(self._update_preferences(expired_entry))
 
         # the flow only leaves guardrail_in when blocked=False there; if blocked=True and
         # the orchestrator was never reached, the flow stopped at guardrail_in, so we don't

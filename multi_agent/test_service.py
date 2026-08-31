@@ -9,7 +9,7 @@ import pytest
 from .exception import MultiAgentServiceNotSetupException
 from .entity import AgentName, AgentResponse, Message, Role
 from .service import MultiAgentService
-from .session import Session
+from .thread_cache import ThreadCacheEntry
 from _internal.storage.exceptions import PDFRenderException, StorageUploadException
 
 USER_ID = UUID("11111111-1111-1111-1111-111111111111")
@@ -41,7 +41,7 @@ def service(envs: Any) -> MultiAgentService:
 
 def _stub_graph(service: MultiAgentService, end_state: dict) -> MagicMock:
     """Wires a fake compiled graph as `service.compiled_graph`, the single graph
-    shared by every session (no per-thread compile)."""
+    shared by every thread (no per-thread compile)."""
 
     compiled = MagicMock()
     compiled.ainvoke = AsyncMock(return_value=end_state)
@@ -90,7 +90,7 @@ class TestProcessMessage:
             "thread_id": THREAD_ID,
         }
 
-    def test_reuses_the_cached_session_on_the_second_call(self, service):
+    def test_reuses_the_cached_thread_on_the_second_call(self, service):
         compiled = _stub_graph(service, {
             "final_response": "resposta",
             "blocked": False,
@@ -106,7 +106,7 @@ class TestProcessMessage:
         service.repository.retrieve_messages.assert_called_once()
         assert compiled.ainvoke.call_count == 2
 
-    def test_hydrates_a_new_session_from_the_repository_history(self, service):
+    def test_hydrates_a_new_thread_from_the_repository_history(self, service):
         service.repository.retrieve_messages.return_value = [
             Message(
                 user_id=USER_ID, thread_id=THREAD_ID, role=Role.USER,
@@ -195,7 +195,7 @@ class TestProcessMessage:
         assert response.content == "aqui está o relatório"
         assert response.report_url is None
 
-    def test_fires_and_forgets_preferences_update_when_a_session_expires(self, service):
+    def test_fires_and_forgets_preferences_update_when_a_thread_cache_entry_expires(self, service):
         _stub_graph(service, {
             "final_response": "resposta",
             "blocked": False,
@@ -203,10 +203,10 @@ class TestProcessMessage:
             "called_agents": [],
             "report_html": None,
         })
-        expired = Session(
+        expired = ThreadCacheEntry(
             user_id=USER_ID, thread_id=UUID("33333333-3333-3333-3333-333333333333"),
         )
-        service.session_store.sweep = MagicMock(return_value=[expired])
+        service.thread_cache.sweep = MagicMock(return_value=[expired])
         service._update_preferences = AsyncMock()
 
         asyncio.run(service.process_message("olá", USER_ID, THREAD_ID))
@@ -258,7 +258,7 @@ class TestSetup:
         assert service.preferences_agent is not None
         assert service.graph is mock_graph
         assert service.compiled_graph is mock_graph.compile.return_value
-        mock_graph.compile.assert_called_once()  # compiled once, shared by every session
+        mock_graph.compile.assert_called_once()  # compiled once, shared by every thread
 
 
 class TestFetchPredictModelTools:

@@ -1,12 +1,12 @@
-"""Per-thread session bookkeeping on top of ONE shared MemorySaver/compiled
-graph (both built once in MultiAgentService.setup()): the checkpointer already
-partitions state by thread_id via config, so there's no need for a saver or a
-compile() per thread. This module only tracks which threads are "warm"
-(hydrated from Mongo) and for how long, so a thread hydrates once and its
-checkpoint entry is dropped from the shared saver after SESSION_TTL_SECONDS of
-inactivity. Expired sessions are swept lazily (on the next request from
-anyone) so their preferences can be updated once, over the whole conversation,
-instead of on every turn.
+"""Tracks which LangGraph threads are "warm" (hydrated from Mongo into the
+shared MemorySaver/compiled graph, both built once in MultiAgentService.setup())
+and for how long. A thread is the LangGraph unit of conversation identity
+(thread_id); this module has no concept of its own beyond that — it just
+caches, per thread_id, whether that thread's checkpoint is already seeded and
+since when, so a thread hydrates once and its checkpoint entry is dropped from
+the shared saver after TTL_SECONDS of inactivity. Expired entries are swept
+lazily (on the next request from anyone) so preferences can be updated once,
+over the whole conversation, instead of on every turn.
 """
 
 from dataclasses import dataclass, field
@@ -43,7 +43,7 @@ def render_preferences(preferences: UserPreferences) -> str:
 
 
 @dataclass
-class Session:
+class ThreadCacheEntry:
     user_id: UUID
     thread_id: UUID
     last_access: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
@@ -52,8 +52,8 @@ class Session:
         self.last_access = datetime.now(timezone.utc)
 
 
-class SessionStore:
-    """In-process cache of Session by thread_id.
+class ThreadCache:
+    """In-process map of thread_id -> ThreadCacheEntry.
 
     # ponytail: plain dict with lazy sweep on access; move to Redis if this
     # ever runs with more than one replica.
@@ -61,27 +61,27 @@ class SessionStore:
 
     def __init__(self, ttl_seconds: int) -> None:
         self._ttl = timedelta(seconds=ttl_seconds)
-        self._sessions: dict[UUID, Session] = {}
+        self._entries: dict[UUID, ThreadCacheEntry] = {}
 
-    def get(self, thread_id: UUID) -> Session | None:
-        session = self._sessions.get(thread_id)
-        if session is None:
+    def get(self, thread_id: UUID) -> ThreadCacheEntry | None:
+        entry = self._entries.get(thread_id)
+        if entry is None:
             return None
-        if self._is_expired(session):
+        if self._is_expired(entry):
             return None
-        session.touch()
-        return session
+        entry.touch()
+        return entry
 
-    def put(self, session: Session) -> None:
-        self._sessions[session.thread_id] = session
+    def put(self, entry: ThreadCacheEntry) -> None:
+        self._entries[entry.thread_id] = entry
 
-    def sweep(self) -> list[Session]:
-        """Removes and returns every session whose TTL has expired."""
+    def sweep(self) -> list[ThreadCacheEntry]:
+        """Removes and returns every entry whose TTL has expired."""
 
-        expired = [s for s in self._sessions.values() if self._is_expired(s)]
-        for session in expired:
-            del self._sessions[session.thread_id]
+        expired = [e for e in self._entries.values() if self._is_expired(e)]
+        for entry in expired:
+            del self._entries[entry.thread_id]
         return expired
 
-    def _is_expired(self, session: Session) -> bool:
-        return datetime.now(timezone.utc) - session.last_access > self._ttl
+    def _is_expired(self, entry: ThreadCacheEntry) -> bool:
+        return datetime.now(timezone.utc) - entry.last_access > self._ttl

@@ -4,17 +4,17 @@ from uuid import UUID, uuid4
 from langchain.messages import AIMessage, HumanMessage, SystemMessage
 
 from .entity import Message, Role, UserPreferences
-from .session import Session, SessionStore, message_to_base_message, render_preferences
+from .thread_cache import ThreadCacheEntry, ThreadCache, message_to_base_message, render_preferences
 
 USER_ID = UUID("11111111-1111-1111-1111-111111111111")
 THREAD_ID = UUID("22222222-2222-2222-2222-222222222222")
 
 
-def _session(thread_id: UUID = THREAD_ID, last_access: datetime | None = None) -> Session:
-    session = Session(user_id=USER_ID, thread_id=thread_id)
+def _entry(thread_id: UUID = THREAD_ID, last_access: datetime | None = None) -> ThreadCacheEntry:
+    entry = ThreadCacheEntry(user_id=USER_ID, thread_id=thread_id)
     if last_access is not None:
-        session.last_access = last_access
-    return session
+        entry.last_access = last_access
+    return entry
 
 
 class TestMessageToBaseMessage:
@@ -50,50 +50,50 @@ class TestRenderPreferences:
         assert render_preferences(preferences) == ""
 
 
-class TestSessionStore:
+class TestThreadCache:
     def test_get_returns_none_on_cache_miss(self):
-        store = SessionStore(ttl_seconds=60)
-        assert store.get(THREAD_ID) is None
+        cache = ThreadCache(ttl_seconds=60)
+        assert cache.get(THREAD_ID) is None
 
-    def test_get_returns_a_cached_session(self):
-        store = SessionStore(ttl_seconds=60)
-        session = _session()
-        store.put(session)
+    def test_get_returns_a_cached_entry(self):
+        cache = ThreadCache(ttl_seconds=60)
+        entry = _entry()
+        cache.put(entry)
 
-        assert store.get(THREAD_ID) is session
+        assert cache.get(THREAD_ID) is entry
 
-    def test_get_evicts_an_expired_session(self):
-        store = SessionStore(ttl_seconds=60)
-        store.put(_session(last_access=datetime.now(timezone.utc) - timedelta(seconds=120)))
+    def test_get_evicts_an_expired_entry(self):
+        cache = ThreadCache(ttl_seconds=60)
+        cache.put(_entry(last_access=datetime.now(timezone.utc) - timedelta(seconds=120)))
 
-        assert store.get(THREAD_ID) is None
+        assert cache.get(THREAD_ID) is None
 
     def test_get_touches_last_access(self):
-        store = SessionStore(ttl_seconds=60)
-        session = _session(last_access=datetime.now(timezone.utc) - timedelta(seconds=30))
-        store.put(session)
-        before = session.last_access
+        cache = ThreadCache(ttl_seconds=60)
+        entry = _entry(last_access=datetime.now(timezone.utc) - timedelta(seconds=30))
+        cache.put(entry)
+        before = entry.last_access
 
-        store.get(THREAD_ID)
+        cache.get(THREAD_ID)
 
-        assert session.last_access > before
+        assert entry.last_access > before
 
-    def test_sweep_removes_and_returns_only_expired_sessions(self):
-        store = SessionStore(ttl_seconds=60)
-        fresh = _session(thread_id=THREAD_ID)
-        expired = _session(thread_id=uuid4(), last_access=datetime.now(timezone.utc) - timedelta(seconds=120))
-        store.put(fresh)
-        store.put(expired)
+    def test_sweep_removes_and_returns_only_expired_entries(self):
+        cache = ThreadCache(ttl_seconds=60)
+        fresh = _entry(thread_id=THREAD_ID)
+        expired = _entry(thread_id=uuid4(), last_access=datetime.now(timezone.utc) - timedelta(seconds=120))
+        cache.put(fresh)
+        cache.put(expired)
 
-        swept = store.sweep()
+        swept = cache.sweep()
 
         assert swept == [expired]
-        assert store.get(THREAD_ID) is fresh
-        assert store._sessions.get(expired.thread_id) is None
+        assert cache.get(THREAD_ID) is fresh
+        assert cache._entries.get(expired.thread_id) is None
 
-    def test_sweep_returns_a_session_only_once(self):
-        store = SessionStore(ttl_seconds=60)
-        store.put(_session(last_access=datetime.now(timezone.utc) - timedelta(seconds=120)))
+    def test_sweep_returns_an_entry_only_once(self):
+        cache = ThreadCache(ttl_seconds=60)
+        cache.put(_entry(last_access=datetime.now(timezone.utc) - timedelta(seconds=120)))
 
-        assert len(store.sweep()) == 1
-        assert store.sweep() == []
+        assert len(cache.sweep()) == 1
+        assert cache.sweep() == []
