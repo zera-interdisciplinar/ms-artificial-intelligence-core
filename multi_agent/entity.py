@@ -69,6 +69,18 @@ class Message(BaseModel):
     agent: AgentName | None = None
     created_at: datetime
 
+class UserPreferences(BaseModel):
+    """Long-term, cross-conversation memory about a user: writing style, company
+    context and recurring requests. Updated out-of-band (fire-and-forget)
+    when a thread's cache entry expires, over the whole conversation."""
+
+    user_id: UUID
+    writing_style: str | None = None
+    company_context: str | None = None
+    frequent_requests: list[str] = []
+    updated_at: datetime
+
+
 class PredictionItem(BaseModel):
     """A single predict_model result, validated right after the LLM call so a
     malformed/hallucinated shape fails loudly there instead of propagating as
@@ -88,6 +100,7 @@ class State(MessagesState):
     # general
     called_agents: Annotated[list[AgentName], _reset_or_add_list]
     current_request: str | None
+    user_preferences: str | None  # rendered long-term memory, seeded on thread hydration
 
     # routing
     next_agent: AgentName | None  # an AgentName value
