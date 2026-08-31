@@ -47,9 +47,9 @@ def make_orchestrator_func(orchestrator_agent: CompiledStateGraph) -> GraphNodeF
         }
 
         if next_agent == AgentName.END:
-            result["final_response"] = classification["suggestion"]
-            result["blocked"] = True
-            result["blocked_reason"] = "unclassified_intent"
+            # unclassified intent still leaves through guardrail_out, like every other
+            # answer, so the suggestion goes through the same PII/safety check.
+            result["formatted_response"] = classification["suggestion"]
 
         return result
 

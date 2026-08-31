@@ -38,7 +38,10 @@ class TestOrchestratorFunc:
         agent.ainvoke = AsyncMock(return_value={"messages": [MagicMock(content=content)]})
         return agent
 
-    def test_sets_final_response_from_agent_suggestion_when_next_agent_is_end(self):
+    def test_sets_formatted_response_from_agent_suggestion_when_next_agent_is_end(self):
+        # unclassified intent still routes through guardrail_out (see orchestrator_fate_decision /
+        # the graph wiring in service.py), so the suggestion goes through formatted_response like
+        # any other agent's answer, not final_response directly.
         agent = self._make_agent(
             '{"intent": "unclassified", "next_agent": "%s", "suggestion": "posso ajudar com dúvidas sobre o Zera"}'
             % AgentName.END.value
@@ -52,9 +55,8 @@ class TestOrchestratorFunc:
         result = asyncio.run(orchestrator_func(state))
 
         assert result["next_agent"] == AgentName.END
-        assert result["final_response"] == "posso ajudar com dúvidas sobre o Zera"
-        assert result["blocked"] is True
-        assert result["blocked_reason"] == "unclassified_intent"
+        assert result["formatted_response"] == "posso ajudar com dúvidas sobre o Zera"
+        assert "final_response" not in result
 
     def test_uses_resolved_request_from_the_agent_when_history_resolves_a_reference(self):
         agent = self._make_agent(

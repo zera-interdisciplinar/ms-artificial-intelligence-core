@@ -266,7 +266,7 @@ class MultiAgentService(IMultiAgentService):
                 AgentName.PREDICT_MODEL: AgentName.PREDICT_MODEL,
                 AgentName.REPORT_AGENT: AgentName.REPORT_AGENT,
                 AgentName.FAQ_AGENT: AgentName.FAQ_AGENT,
-                AgentName.END: AgentName.END,
+                AgentName.END: AgentName.GUARDRAIL_OUT,
             }
         )
 
@@ -369,8 +369,14 @@ class MultiAgentService(IMultiAgentService):
             self.logger.Error("The multi-agent service is not set up. Please call the setup() method before processing messages.", MultiAgentServiceNotSetupException)
             raise MultiAgentServiceNotSetupException("The multi-agent service is not set up. Please call the setup() method before processing messages.")
 
-        # certifies that the thread is already in cache, or hydrates it from Mongo if it's not (first turn, or cache expired)
-        self.thread_cache.get(thread_id) or self._hydrate_thread(user_id, thread_id)
+        # get the cache entry in memory
+        session: ThreadCacheEntry = self.thread_cache.get(thread_id)
+        if session:
+            self.logger.Info(f"Cache hit for user_id: {user_id}, thread_id: {thread_id}")
+            session.touch()  # refreshes the TTL
+        else:
+            self.logger.Info(f"Cache miss for user_id: {user_id}, thread_id: {thread_id}. Hydrating thread.")
+            session = self._hydrate_thread(user_id, thread_id)
 
         # delta state: only the fields with a reducer (reset by an empty/zero value) plus the
         # fields that a node may skip this turn and that would otherwise leak the previous
