@@ -42,6 +42,7 @@ class AgentName(str, Enum):
     FAQ_AGENT = "faq"
     REPORT_AGENT = "report"
     PREDICT_MODEL = "predict_model"
+    INVENTORY_AGENT = "inventory_agent"
     FORMATTER_AGENT = "formatter"
     JUDGE_AGENT = "judge"
     GUARDRAIL_OUT = "guardrail_out"
@@ -120,6 +121,9 @@ class State(MessagesState):
 
     # predict_model
     predictions: list[PredictionItem]
+
+    # inventory_agent
+    inventory_answer: str | None
 
     # formatter_agent
     formatted_response: str | None

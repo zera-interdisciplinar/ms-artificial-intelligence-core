@@ -1,5 +1,5 @@
 """
-E2E tests for our application using FastAPI's TestClient. These tests are meant to be run in a CI/CD pipeline and will hit real external services (Gemini, Groq, MongoDB, Supabase, and the predict_model MCP)
+E2E tests for our application using FastAPI's TestClient. These tests are meant to be run in a CI/CD pipeline and will hit real external services (Gemini, Groq, MongoDB, Supabase, the predict_model MCP, and the ms-inventory MCP)
 They are designed to verify that the entire system works together as expected, rather than testing individual components in isolation.
 Edit these tests are out of context, except if the task is explicity saying to edit them or something that causes a change in out api behavior. They are not meant to be run locally, as they require access to real external services and secrets.
 
@@ -9,6 +9,7 @@ Tests usecases:
 - /multi-agent/process-message: Test the FAQ agent's ability to retrieve context from a PDF
 - /multi-agent/process-message: Test the predict agent's ability to generate predictions based on input
 - /multi-agent/process-message: Test the report agent's ability to generate reports based on input
+- /multi-agent/process-message: Test the inventory agent's ability to answer a factual inventory query
 - /multi-agent/process-message: Tests the ablity of a off-topic user message to be handled (blocked by guardrail_in)
 """
 
@@ -45,6 +46,12 @@ def called_report_flow(response: AgentResponse) -> bool:
     Check if the report agent was called in the multi-agent flow based on the response.
     """
     return "report" in response.agent_trace
+
+def called_inventory_flow(response: AgentResponse) -> bool:
+    """
+    Check if the inventory agent was called in the multi-agent flow based on the response.
+    """
+    return "inventory_agent" in response.agent_trace
 
 
 @pytest.fixture()
@@ -130,6 +137,7 @@ def test_faq_agent(client: TestClient) -> None:
     # assert that the response did not called any other agents or that the response is not blocked
     assert not called_predict_flow(response)
     assert not called_report_flow(response)
+    assert not called_inventory_flow(response)
     assert not response.blocked
 
 def test_predict_agent(client: TestClient) -> None:
@@ -163,6 +171,7 @@ def test_predict_agent(client: TestClient) -> None:
     # assert that the response did not called any other agents or that the response is not blocked
     assert not called_faq_flow(response)
     assert not called_report_flow(response)
+    assert not called_inventory_flow(response)
     assert not response.blocked
 
 def test_report_agent(client: TestClient) -> None:
@@ -193,6 +202,37 @@ def test_report_agent(client: TestClient) -> None:
     # assert that the response did not called any other agents or that the response is not blocked
     assert not called_faq_flow(response)
     assert not called_predict_flow(response)
+    assert not called_inventory_flow(response)
+    assert not response.blocked
+
+def test_inventory_agent(client: TestClient) -> None:
+    """
+    Test the inventory agent's ability to answer a factual inventory query.
+    """
+    user_message = "Qual o status atual do notebook de patrimônio NB-4521?"
+
+    body: ProcessMessageRequest = ProcessMessageRequest(
+        user_id=_new_UUID(),
+        thread_id=_new_UUID(),
+        content=user_message,
+    )
+
+    http_response: Response = client.post(
+        "/api/v1/multi-agent/process-message",
+        json=body.model_dump(mode="json"),
+    )
+
+    assert http_response.status_code == 200
+    response: AgentResponse = AgentResponse(**http_response.json())
+
+    # assert that the response has successfully processed the message and that the inventory agent was called
+    assert called_inventory_flow(response)
+    assert response.content is not None
+
+    # assert that the response did not called any other agents or that the response is not blocked
+    assert not called_faq_flow(response)
+    assert not called_predict_flow(response)
+    assert not called_report_flow(response)
     assert not response.blocked
 
 def test_off_topic_agent(client: TestClient) -> None:

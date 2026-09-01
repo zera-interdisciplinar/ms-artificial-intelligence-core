@@ -21,6 +21,9 @@ Agente responsável por gerar relatórios sobre a empresa utilizadora. Ele receb
 ### predict_model
 Agente responsável por realizar uma integração com um outro repositório interno que tem um modelo de predição de tempo de vida útil de equipamentos eletrônicos. Ele recebe o Estado inicial com a pergunta do usuário (já com PII removidos), incluindo os itens selecionados para descarte, e faz uma chamada para o modelo de predição, retornando as informações de tempo de vida útil estimado para cada item. O modelo de predição utiliza regressão linear para estimar o tempo de vida útil dos equipamentos, com base em dados históricos e características dos itens. Por ser um modelo simples, o predict_model será usado para ajustar a resposta, verificando se é coerente com o que o modelo de predição retornou, e caso não seja, ele ajusta a resposta. Haverá intruções desse ajuste no prompt do predict_model, para que ele saiba como ajustar a resposta de acordo com o que o modelo de predição retornou.
 
+### inventory_agent
+Agente responsável por consultar dados factuais já existentes no inventário de equipamentos, integrando com o servidor MCP externo do ms-inventory (detalhe de item, busca por categoria/lote, checklist de materiais perigosos, saúde do inventário, garantia próxima do vencimento, análise de ciclo de vida, entre outras ferramentas descobertas em tempo de execução). Ele recebe o Estado inicial com a pergunta do usuário (já com PII removidos) e escolhe, em tempo de execução, qual(is) ferramenta(s) chamar entre as disponíveis, respondendo exclusivamente com base no que as ferramentas retornarem. Diferente do predict_model, não calcula nada novo: apenas consulta e apresenta dado já existente no inventário.
+
 ### formatter_agent
 Agente responsável por formatar a resposta final do sistema de uma forma amigavel para o usuário. Ele recebe o Estado já modificado durante o fluxo, e constroi a resposta final de forma organizada e padronizada.
 

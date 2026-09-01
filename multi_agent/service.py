@@ -29,6 +29,7 @@ from _internal.storage.exceptions import StorageServiceException
 from .prompt.guardrail_in import GUARDRAIL_IN_SYSTEM_PROMPT_FINAL
 from .prompt.orchestrator import ORCHESTRATOR_SYSTEM_PROMPT_FINAL
 from .prompt.predict_model import build_predict_model_system_prompt
+from .prompt.inventory_agent import INVENTORY_AGENT_SYSTEM_PROMPT_FINAL
 from .prompt.report_agent import REPORT_AGENT_SYSTEM_PROMPT_FINAL
 from .prompt.faq_agent import FAQ_AGENT_SYSTEM_PROMPT_FINAL
 from .prompt.formatter_agent import FORMATTER_AGENT_SYSTEM_PROMPT_FINAL
@@ -54,6 +55,7 @@ from .entity import AgentName
 from .agents.guardrail import Guardrail
 from .agents.orchestrator import make_orchestrator_func, orchestrator_fate_decision
 from .agents.predict_model import make_predict_model_func
+from .agents.inventory import make_inventory_func
 from .agents.faq import FAQ
 from .agents.report import make_report_func
 from .agents.formatter import make_formatter_func
@@ -137,6 +139,26 @@ class MultiAgentService(IMultiAgentService):
         predict_time_to_failure_batch = tools_by_name["predict_time_to_failure_batch"]
 
         return predict_time_to_failure_batch, categories, climate_zones
+    
+    async def _fetch_ms_inventory_tools(self) -> list[BaseTool]:
+        """
+        Discovers the tools exposed by the ms-inventory MCP server (get_inventory),
+        reached through the Kong gateway. The gateway route requires the api-key-auth
+        plugin, so MS_INVENTORY_API_KEY is sent as an apikey header.
+        """
+        assert self.envs.MS_INVENTORY_MCP_URL is not None, "MS_INVENTORY_MCP_URL must be set to reach the ms-inventory MCP server"
+        assert self.envs.MS_INVENTORY_API_KEY is not None, "MS_INVENTORY_API_KEY must be set to authenticate against the ms-inventory MCP server"
+
+        client = MultiServerMCPClient(
+            {
+                "ms_inventory": {
+                    "url": self.envs.MS_INVENTORY_MCP_URL,
+                    "transport": "streamable_http",
+                    "headers": {"apikey": self.envs.MS_INVENTORY_API_KEY},
+                }
+            }
+        )
+        return await client.get_tools()
 
     def setup(self) -> None:
         """
@@ -202,6 +224,15 @@ class MultiAgentService(IMultiAgentService):
             system_prompt=REPORT_AGENT_SYSTEM_PROMPT_FINAL,
         )
 
+        # discovers the ms-inventory MCP tools; the LLM decides at runtime which
+        self.logger.Info("Fetching ms-inventory MCP tools")
+        inventory_tools = asyncio.run(self._fetch_ms_inventory_tools())
+        inventory_agent = create_agent(
+            model=llm,
+            system_prompt=INVENTORY_AGENT_SYSTEM_PROMPT_FINAL,
+            tools=inventory_tools,
+        )
+
         self.faq = FAQ(self.envs, self.logger)
         self.faq.setup()
 
@@ -243,6 +274,7 @@ class MultiAgentService(IMultiAgentService):
         new_graph.add_node(AgentName.ORCHESTRATOR, make_orchestrator_func(orchestrator_agent))
         new_graph.add_node(AgentName.PREDICT_MODEL, make_predict_model_func(predict_model_agent))
         new_graph.add_node(AgentName.REPORT_AGENT, make_report_func(report_agent))
+        new_graph.add_node(AgentName.INVENTORY_AGENT, make_inventory_func(inventory_agent))
         new_graph.add_node(AgentName.FAQ_AGENT, self.faq.faq_func)
         new_graph.add_node(AgentName.FORMATTER_AGENT, make_formatter_func(formatter_agent))
         new_graph.add_node(AgentName.JUDGE_AGENT, make_judge_func(judge_agent))
@@ -266,6 +298,7 @@ class MultiAgentService(IMultiAgentService):
                 AgentName.PREDICT_MODEL: AgentName.PREDICT_MODEL,
                 AgentName.REPORT_AGENT: AgentName.REPORT_AGENT,
                 AgentName.FAQ_AGENT: AgentName.FAQ_AGENT,
+                AgentName.INVENTORY_AGENT: AgentName.INVENTORY_AGENT,
                 AgentName.END: AgentName.GUARDRAIL_OUT,
             }
         )
@@ -273,6 +306,7 @@ class MultiAgentService(IMultiAgentService):
         new_graph.add_edge(AgentName.PREDICT_MODEL, AgentName.FORMATTER_AGENT)
         new_graph.add_edge(AgentName.REPORT_AGENT, AgentName.FORMATTER_AGENT)
         new_graph.add_edge(AgentName.FAQ_AGENT, AgentName.FORMATTER_AGENT)
+        new_graph.add_edge(AgentName.INVENTORY_AGENT, AgentName.FORMATTER_AGENT)
 
         new_graph.add_edge(AgentName.FORMATTER_AGENT, AgentName.JUDGE_AGENT)
 
@@ -399,6 +433,7 @@ class MultiAgentService(IMultiAgentService):
                 "sources": [],
                 "report_html": None,
                 "predictions": [],
+                "inventory_answer": None,
                 "formatted_response": None,
                 "approved": None,
                 "discrepancy": None,

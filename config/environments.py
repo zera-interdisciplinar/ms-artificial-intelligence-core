@@ -39,6 +39,10 @@ class Environments:
 
     # predict_model MCP (sdk-ml-failure-predictor, via Kong gateway)
     PREDICT_MODEL_MCP_URL: str | None
+    
+    # ms-inventory MCP (ms-inventory, via Kong gateway)
+    MS_INVENTORY_MCP_URL: str | None
+    MS_INVENTORY_API_KEY: str | None
 
     # Supabase Storage
     SUPABASE_URL: str | None
@@ -72,6 +76,10 @@ class Environments:
 
         # predict_model MCP (sdk-ml-failure-predictor, via Kong gateway)
         self.PREDICT_MODEL_MCP_URL = os.getenv("PREDICT_MODEL_MCP_URL")
+        
+        # ms-inventory MCP (ms-inventory, via Kong gateway)
+        self.MS_INVENTORY_MCP_URL = os.getenv("MS_INVENTORY_MCP_URL")
+        self.MS_INVENTORY_API_KEY = os.getenv("MS_INVENTORY_API_KEY")
 
         # Supabase Storage
         self.SUPABASE_URL = os.getenv("SUPABASE_URL")

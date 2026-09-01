@@ -249,11 +249,19 @@ class TestSetup:
         service.setup()
 
         assert mock_llm.called
-        assert mock_create_agent.call_count == 9  # 8 graph agents + preferences_agent
-        mock_mcp_client.assert_called_once_with(
+        assert mock_create_agent.call_count == 10  # 9 graph agents + preferences_agent
+        mock_mcp_client.assert_any_call(
             {
                 "predict_model": {
                     "url": service.envs.PREDICT_MODEL_MCP_URL,
+                    "transport": "streamable_http",
+                }
+            }
+        )
+        mock_mcp_client.assert_any_call(
+            {
+                "ms_inventory": {
+                    "url": service.envs.MS_INVENTORY_MCP_URL,
                     "transport": "streamable_http",
                 }
             }

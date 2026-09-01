@@ -66,11 +66,6 @@ def make_judge_func(judge_agent: CompiledStateGraph) -> GraphNodeFunc:
                 {
                     "next_agent": None,
                     "intent": None,
-                    "answer": None,
-                    "sources": [],
-                    "report_html": None,
-                    "predictions": [],
-                    "formatted_response": None,
                     "messages": [
                         SystemMessage(
                             content=(
