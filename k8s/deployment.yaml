@@ -105,3 +105,13 @@ spec:
             secretKeyRef:
               name: ms-artificial-intelligence-core-secrets
               key: SUPABASE_BUCKET_NAME
+        - name: MS_INVENTORY_MCP_URL
+          valueFrom:
+            secretKeyRef:
+              name: ms-artificial-intelligence-core-secrets
+              key: MS_INVENTORY_MCP_URL
+        - name: MS_INVENTORY_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: ms-artificial-intelligence-core-secrets
+              key: MS_INVENTORY_API_KEY
