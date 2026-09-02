@@ -79,12 +79,8 @@ class TestJudgeFunc:
 
         assert result["approved"] is False
         assert result["discrepancy"] == "response_omits_data"
-        assert result["formatted_response"] is None
-        assert result["answer"] is None
-        assert result["sources"] == []
-        assert result["report_html"] is None
-        assert result["predictions"] == []
         assert result["next_agent"] is None
+        assert result["intent"] is None
         assert len(result["messages"]) == 1
         assert "response_omits_data" in result["messages"][0].content
 

@@ -54,6 +54,8 @@ jobs:
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
       SUPABASE_BUCKET_NAME: ${{ secrets.SUPABASE_BUCKET_NAME }}
       FAQ_PDF_PATH: multi_agent/agents/data/faq.pdf
+      MS_INVENTORY_MCP_URL: ${{ secrets.MS_INVENTORY_MCP_URL }}
+      MS_INVENTORY_API_KEY: ${{ secrets.MS_INVENTORY_API_KEY }}
 
     steps:
       - name: Checkout code
