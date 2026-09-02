@@ -263,6 +263,7 @@ class TestSetup:
                 "ms_inventory": {
                     "url": service.envs.MS_INVENTORY_MCP_URL,
                     "transport": "streamable_http",
+                    "headers": {"apikey": service.envs.MS_INVENTORY_API_KEY},
                 }
             }
         )
