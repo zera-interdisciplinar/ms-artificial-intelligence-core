@@ -126,6 +126,11 @@ Usuário: "O notebook de patrimônio NB-4521 está em uso ou disponível?"
 Assistente: {{"intent": "inventory_search", "next_agent": "{AgentName.INVENTORY_AGENT.value}", "resolved_request": "O notebook de patrimônio NB-4521 está em uso ou disponível?"}}
 """
 
+SHOT_2E: str = f"""
+Usuário: "Quais são os produtos que temos no nosso estoque?"
+Assistente: {{"intent": "inventory_search", "next_agent": "{AgentName.INVENTORY_AGENT.value}", "resolved_request": "Quais são os produtos que temos no nosso estoque?"}}
+"""
+
 SHOT_3: str = f"""
 Usuário: "Qual é a capital da França?"
 Assistente: {{"intent": "unclassified", "next_agent": "{AgentName.END.value}", "suggestion": "Não consegui identificar uma solicitação relacionada ao sistema Zera na sua pergunta. Posso ajudar com dúvidas sobre o Zera, geração de relatórios de inventário/descarte ou previsões de vida útil de equipamentos — como posso te ajudar?"}}
@@ -151,6 +156,8 @@ SHOTS_OPEN
 {SHOT_2C}
 
 {SHOT_2D}
+
+{SHOT_2E}
 
 {SHOT_3}
 SHOTS_END
