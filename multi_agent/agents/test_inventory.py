@@ -7,6 +7,7 @@ import pytest
 
 from multi_agent.entity import AgentName, State
 from multi_agent.agents.inventory import make_inventory_func
+from multi_agent.unit_scope import current_unit_id, set_unit_id
 
 
 class TestInventoryFunc:
@@ -60,3 +61,27 @@ class TestInventoryFunc:
 
         with pytest.raises(json.JSONDecodeError):
             asyncio.run(inventory_func(cast(State, {"current_request": "status do notebook NB-4521"})))
+
+
+class TestUnitScope:
+    def test_publishes_the_state_unit_id_for_the_mcp_tools(self):
+        """The tools read the unit from the ContextVar, so the node has to set it
+        before the agent runs — otherwise the call would go out unscoped."""
+
+        set_unit_id(None)
+        seen: dict[str, str | None] = {}
+
+        async def ainvoke(_payload):
+            seen["unit_id"] = current_unit_id.get()
+            return {"messages": [MagicMock(content=json.dumps({"answer": "ok"}))]}
+
+        inventory_agent = MagicMock()
+        inventory_agent.ainvoke = ainvoke
+        inventory_func = make_inventory_func(inventory_agent)
+
+        asyncio.run(inventory_func(cast(State, {
+            "current_request": "quais itens têm bateria de lítio",
+            "unit_id": "33333333-3333-3333-3333-333333333333",
+        })))
+
+        assert seen["unit_id"] == "33333333-3333-3333-3333-333333333333"

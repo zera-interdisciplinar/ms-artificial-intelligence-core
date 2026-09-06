@@ -11,10 +11,13 @@ Tests usecases:
 - /multi-agent/process-message: Test the report agent's ability to generate reports based on input
 - /multi-agent/process-message: Test the inventory agent's ability to answer a factual inventory query
 - /multi-agent/process-message: Tests the ablity of a off-topic user message to be handled (blocked by guardrail_in)
+- /multi-agent/process-message: A unit_id that is not the user's is refused with 403, never answered from another unit's data
 """
 
+import os
 from uuid import uuid4
 
+import httpx
 import pytest
 from fastapi.testclient import TestClient
 from httpx import Response
@@ -22,6 +25,31 @@ from multi_agent.entity import AgentResponse
 from _internal.api.dto import ProcessMessageRequest
 
 pytestmark = pytest.mark.integration
+
+INTEGRATION_USER_ID = os.getenv("INTEGRATION_USER_ID", "")
+INTEGRATION_UNIT_ID = os.getenv("INTEGRATION_UNIT_ID", "")
+
+_ADMIN_CORE_URL = os.getenv("ADMIN_CORE_URL", "")
+_ADMIN_CORE_API_KEY = os.getenv("ADMIN_CORE_API_KEY", "")
+_ADMIN_CORE_SERVICE_EMAIL = os.getenv("ADMIN_CORE_SERVICE_EMAIL", "")
+_ADMIN_CORE_SERVICE_PASSWORD = os.getenv("ADMIN_CORE_SERVICE_PASSWORD", "")
+
+
+@pytest.fixture(scope="module")
+def auth_headers() -> dict:
+    """Logs in against ms-administrative-core and returns the Authorization header
+    to forward on every /process-message call."""
+
+    response = httpx.post(
+        f"{_ADMIN_CORE_URL}/api/v1/auth/login",
+        json={"email": _ADMIN_CORE_SERVICE_EMAIL, "password": _ADMIN_CORE_SERVICE_PASSWORD},
+        headers={"apikey": _ADMIN_CORE_API_KEY},
+        timeout=10.0,
+    )
+    response.raise_for_status()
+    access_token = response.json()["accessToken"]
+    return {"Authorization": f"Bearer {access_token}"}
+
 
 def _new_UUID() -> str:
     """
@@ -67,6 +95,7 @@ def client() -> TestClient:
     from repository.multi_agent import MultiAgentRepository
     from _internal.storage.pdf import PdfRenderer
     from _internal.storage.service import SupabaseStorageService
+    from _internal.admin_core.client import AdminCoreClient
 
     envs = Environments()
     
@@ -92,7 +121,8 @@ def client() -> TestClient:
         envs=envs,
         logger=logger,
         pdf_renderer=pdf_renderer,
-        storage_service=storage_service
+        storage_service=storage_service,
+        admin_core=AdminCoreClient(envs, logger),
     )
     
     multi_agent_service.setup()
@@ -110,21 +140,23 @@ def test_health_endpoint(client: TestClient) -> None:
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
     
-def test_faq_agent(client: TestClient) -> None:
+def test_faq_agent(client: TestClient, auth_headers: dict) -> None:
     """
     Test the FAQ agent's ability to retrieve context from a PDF and generate an answer.
     """
     user_message = "What is the project zera?"
 
     body: ProcessMessageRequest = ProcessMessageRequest(
-        user_id=_new_UUID(),
+        user_id=INTEGRATION_USER_ID,
         thread_id=_new_UUID(),
+        unit_id=INTEGRATION_UNIT_ID,
         content=user_message,
     )
 
     http_response: Response = client.post(
         "/api/v1/multi-agent/process-message",
         json=body.model_dump(mode="json"),
+        headers=auth_headers,
     )
 
     assert http_response.status_code == 200
@@ -140,7 +172,7 @@ def test_faq_agent(client: TestClient) -> None:
     assert not called_inventory_flow(response)
     assert not response.blocked
 
-def test_predict_agent(client: TestClient) -> None:
+def test_predict_agent(client: TestClient, auth_headers: dict) -> None:
     """
     Test the predict agent's ability to generate predictions based on input.
     """
@@ -151,14 +183,16 @@ def test_predict_agent(client: TestClient) -> None:
     )
 
     body: ProcessMessageRequest = ProcessMessageRequest(
-        user_id=_new_UUID(),
+        user_id=INTEGRATION_USER_ID,
         thread_id=_new_UUID(),
+        unit_id=INTEGRATION_UNIT_ID,
         content=user_message,
     )
 
     http_response: Response = client.post(
         "/api/v1/multi-agent/process-message",
         json=body.model_dump(mode="json"),
+        headers=auth_headers,
     )
 
     assert http_response.status_code == 200
@@ -174,21 +208,23 @@ def test_predict_agent(client: TestClient) -> None:
     assert not called_inventory_flow(response)
     assert not response.blocked
 
-def test_report_agent(client: TestClient) -> None:
+def test_report_agent(client: TestClient, auth_headers: dict) -> None:
     """
     Test the report agent's ability to generate reports based on input.
     """
     user_message = "Gere um relatório com o histórico de previsões de falha dos meus equipamentos."
 
     body: ProcessMessageRequest = ProcessMessageRequest(
-        user_id=_new_UUID(),
+        user_id=INTEGRATION_USER_ID,
         thread_id=_new_UUID(),
+        unit_id=INTEGRATION_UNIT_ID,
         content=user_message,
     )
 
     http_response: Response = client.post(
         "/api/v1/multi-agent/process-message",
         json=body.model_dump(mode="json"),
+        headers=auth_headers,
     )
 
     assert http_response.status_code == 200
@@ -205,21 +241,23 @@ def test_report_agent(client: TestClient) -> None:
     assert not called_inventory_flow(response)
     assert not response.blocked
 
-def test_inventory_agent(client: TestClient) -> None:
+def test_inventory_agent(client: TestClient, auth_headers: dict) -> None:
     """
     Test the inventory agent's ability to answer a factual inventory query.
     """
     user_message = "Qual o status atual do notebook de patrimônio NB-4521?"
 
     body: ProcessMessageRequest = ProcessMessageRequest(
-        user_id=_new_UUID(),
+        user_id=INTEGRATION_USER_ID,
         thread_id=_new_UUID(),
+        unit_id=INTEGRATION_UNIT_ID,
         content=user_message,
     )
 
     http_response: Response = client.post(
         "/api/v1/multi-agent/process-message",
         json=body.model_dump(mode="json"),
+        headers=auth_headers,
     )
 
     assert http_response.status_code == 200
@@ -235,21 +273,23 @@ def test_inventory_agent(client: TestClient) -> None:
     assert not called_report_flow(response)
     assert not response.blocked
 
-def test_off_topic_agent(client: TestClient) -> None:
+def test_off_topic_agent(client: TestClient, auth_headers: dict) -> None:
     """
     Tests the ability of a off-topic user message to be handled.
     """
     user_message = "Qual a receita de um bolo de chocolate?"
 
     body: ProcessMessageRequest = ProcessMessageRequest(
-        user_id=_new_UUID(),
+        user_id=INTEGRATION_USER_ID,
         thread_id=_new_UUID(),
+        unit_id=INTEGRATION_UNIT_ID,
         content=user_message,
     )
 
     http_response: Response = client.post(
         "/api/v1/multi-agent/process-message",
         json=body.model_dump(mode="json"),
+        headers=auth_headers,
     )
 
     assert http_response.status_code == 200
@@ -264,3 +304,25 @@ def test_off_topic_agent(client: TestClient) -> None:
     assert not called_report_flow(response)
 
 
+
+
+def test_rejects_a_unit_that_does_not_belong_to_the_user(client: TestClient, auth_headers: dict) -> None:
+    """
+    The unit_id in the body is only a proposal: ms-administrative-core decides. A
+    request naming someone else's unit must be refused, never answered with that
+    unit's inventory.
+    """
+    body: ProcessMessageRequest = ProcessMessageRequest(
+        user_id=INTEGRATION_USER_ID,
+        thread_id=_new_UUID(),
+        unit_id=_new_UUID(),
+        content="Quantos itens existem no inventário?",
+    )
+
+    http_response: Response = client.post(
+        "/api/v1/multi-agent/process-message",
+        json=body.model_dump(mode="json"),
+        headers=auth_headers,
+    )
+
+    assert http_response.status_code == 403

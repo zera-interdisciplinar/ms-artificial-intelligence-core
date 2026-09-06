@@ -102,6 +102,7 @@ class State(MessagesState):
     called_agents: Annotated[list[AgentName], _reset_or_add_list]
     current_request: str | None
     user_preferences: str | None  # rendered long-term memory, seeded on thread hydration
+    unit_id: str | None  # validated against ms-administrative-core
 
     # routing
     next_agent: AgentName | None  # an AgentName value

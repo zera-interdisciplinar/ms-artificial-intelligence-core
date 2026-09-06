@@ -61,10 +61,14 @@ from .agents.report import make_report_func
 from .agents.formatter import make_formatter_func
 from .agents.judge import make_judge_func, judge_fate_decision
 
+# unit scoping
+from _internal.admin_core.client import AdminCoreClient
+from .unit_scope import bind_unit_id
+
 from langchain_groq import ChatGroq
 
 # exceptions
-from .exception import MultiAgentServiceNotSetupException
+from .exception import MultiAgentServiceNotSetupException, UnitMismatchException
 
 from typing import Optional
 
@@ -84,6 +88,7 @@ class MultiAgentService(IMultiAgentService):
     pdf_renderer: PdfRenderer
     storage_service: IStorageService
     thread_cache: ThreadCache
+    admin_core: AdminCoreClient
 
     def __init__(
         self,
@@ -92,6 +97,7 @@ class MultiAgentService(IMultiAgentService):
         logger: Logger,
         pdf_renderer: PdfRenderer,
         storage_service: IStorageService,
+        admin_core: AdminCoreClient,
     ) -> None:
         self.repository = repository
         self.envs = envs
@@ -99,19 +105,23 @@ class MultiAgentService(IMultiAgentService):
         self.pdf_renderer = pdf_renderer
         self.storage_service = storage_service
         self.thread_cache = ThreadCache(envs.SESSION_TTL_SECONDS)
+        self.admin_core = admin_core
 
     async def _fetch_predict_model_tools(self) -> list[BaseTool]:
         """
         Discovers the tools exposed by the sdk-ml-failure-predictor MCP server (predict_time_to_failure),
-        reached through the Kong gateway. No auth headers are sent yet — see docs/integration-predict-time-to-failure.md.
+        reached through the Kong gateway. The gateway route requires the api-key-auth
+        plugin, so PREDICT_MODEL_API_KEY is sent as an apikey header.
         """
         assert self.envs.PREDICT_MODEL_MCP_URL is not None, "PREDICT_MODEL_MCP_URL must be set to reach the predict_model MCP server"
+        assert self.envs.PREDICT_MODEL_API_KEY is not None, "PREDICT_MODEL_API_KEY must be set to authenticate against the predict_model MCP server"
 
         client = MultiServerMCPClient(
             {
                 "predict_model": {
                     "url": self.envs.PREDICT_MODEL_MCP_URL,
                     "transport": "streamable_http",
+                    "headers": {"apikey": self.envs.PREDICT_MODEL_API_KEY},
                 }
             }
         )
@@ -145,6 +155,9 @@ class MultiAgentService(IMultiAgentService):
         Discovers the tools exposed by the ms-inventory MCP server (get_inventory),
         reached through the Kong gateway. The gateway route requires the api-key-auth
         plugin, so MS_INVENTORY_API_KEY is sent as an apikey header.
+
+        Every tool is wrapped by bind_unit_id so the unitId argument is always the
+        one validated in process_message, never the one the LLM produced.
         """
         assert self.envs.MS_INVENTORY_MCP_URL is not None, "MS_INVENTORY_MCP_URL must be set to reach the ms-inventory MCP server"
         assert self.envs.MS_INVENTORY_API_KEY is not None, "MS_INVENTORY_API_KEY must be set to authenticate against the ms-inventory MCP server"
@@ -158,7 +171,7 @@ class MultiAgentService(IMultiAgentService):
                 }
             }
         )
-        return await client.get_tools()
+        return bind_unit_id(await client.get_tools())
 
     def setup(self) -> None:
         """
@@ -397,11 +410,27 @@ class MultiAgentService(IMultiAgentService):
         except Exception as e:
             self.logger.Error(f"Failed to update preferences for user_id: {entry.user_id}", e)
 
-    async def process_message(self, message: str, user_id: UUID, thread_id: UUID) -> AgentResponse:
+    async def _validate_unit(self, user_id: UUID, unit_id: UUID, authorization: str) -> None:
+        """The request only says which unit it *wants*; ms-administrative-core says
+        which one the user actually belongs to. Anything else is a 403 — an
+        unresolvable user is refused too, never widened into a global read."""
+
+        actual_unit_id = await self.admin_core.get_unit_id(user_id, authorization)
+        if actual_unit_id is None or actual_unit_id != unit_id:
+            self.logger.Warning(
+                f"Rejected unit_id {unit_id} for user_id: {user_id} (admin-core says {actual_unit_id})"
+            )
+            raise UnitMismatchException(f"unit_id does not belong to user {user_id}")
+
+    async def process_message(
+        self, message: str, user_id: UUID, thread_id: UUID, unit_id: UUID, authorization: str
+    ) -> AgentResponse:
         # certifies that the graph is already compiled
         if self.compiled_graph is None:
             self.logger.Error("The multi-agent service is not set up. Please call the setup() method before processing messages.", MultiAgentServiceNotSetupException)
             raise MultiAgentServiceNotSetupException("The multi-agent service is not set up. Please call the setup() method before processing messages.")
+
+        await self._validate_unit(user_id, unit_id, authorization)
 
         # get the cache entry in memory
         session: ThreadCacheEntry = self.thread_cache.get(thread_id)
@@ -424,6 +453,7 @@ class MultiAgentService(IMultiAgentService):
                 "called_agents": [],
                 "current_request": None,
                 "user_preferences": None,
+                "unit_id": str(unit_id),
                 "next_agent": None,
                 "intent": None,
                 "blocked": False,

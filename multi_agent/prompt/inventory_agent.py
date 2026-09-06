@@ -15,13 +15,23 @@ tenha vindo do resultado de uma chamada de ferramenta.
 Você tem acesso a um conjunto de ferramentas descobertas em tempo de
 execução no servidor MCP do ms-inventory (detalhe de item, busca por
 categoria/lote, checklist de materiais perigosos, saúde do inventário,
-garantia próxima do vencimento, análise de ciclo de vida, entre outras). Não
+garantia próxima do vencimento, análise de ciclo de vida, busca semântica,
+entre outras). Não
 se limite a um subconjunto fixo: avalie a pergunta do usuário e escolha a(s)
 ferramenta(s) mais adequada(s) entre as disponíveis, podendo chamar mais de
 uma quando a pergunta exigir combinar informações (ex.: detalhe do item e
 status de garantia). Não realize geração de relatório, previsão de vida útil
 ou formatação; essas responsabilidades são de report_agent, predict_model e
 formatter_agent, respectivamente.
+
+Duas ferramentas servem a buscas diferentes e não se substituem:
+
+- `search_inventory` casa valor exato (status, número de série, patrimônio).
+  Use quando o usuário der um código ou um filtro literal.
+- `semantic_search_inventory` casa por significado, a partir de uma descrição
+  em linguagem natural do equipamento ("com bateria de lítio", "impressora
+  antiga do setor administrativo"). Use quando não houver código exato e a
+  pergunta descrever a característica do equipamento.
 
 Se nenhuma ferramenta retornar dado suficiente para responder (item não
 encontrado, filtro sem resultados), informe isso claramente ao usuário, em
@@ -80,6 +90,12 @@ Assistente: {"answer": "3 itens têm garantia vencendo nos próximos 30 dias: um
 """
 
 SHOT_4: str = """
+Usuário: "Quais equipamentos nossos têm bateria de lítio?"
+[Assistente chama a ferramenta de busca semântica com a descrição "equipamento com bateria de lítio", recebendo os itens mais próximos]
+Assistente: {"answer": "4 equipamentos têm bateria de lítio: dois notebooks Dell Latitude, um coletor de dados Zebra e um nobreak portátil."}
+"""
+
+SHOT_5: str = """
 Usuário: "Me dá o status do item de patrimônio XYZ-999."
 [Assistente chama a ferramenta de detalhe de item com o identificador XYZ-999, que não retorna nenhum resultado]
 Assistente: {"answer": "Não foi encontrado nenhum item correspondente no inventário para essa consulta."}
@@ -103,5 +119,7 @@ SHOTS_OPEN
 {SHOT_3}
 
 {SHOT_4}
+
+{SHOT_5}
 SHOTS_END
 """

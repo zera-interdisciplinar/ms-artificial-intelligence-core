@@ -6,7 +6,7 @@ from uuid import UUID
 
 import pytest
 
-from .exception import MultiAgentServiceNotSetupException
+from .exception import MultiAgentServiceNotSetupException, UnitMismatchException
 from .entity import AgentName, AgentResponse, Message, Role
 from .service import MultiAgentService
 from .thread_cache import ThreadCacheEntry
@@ -14,6 +14,8 @@ from _internal.storage.exceptions import PDFRenderException, StorageUploadExcept
 
 USER_ID = UUID("11111111-1111-1111-1111-111111111111")
 THREAD_ID = UUID("22222222-2222-2222-2222-222222222222")
+UNIT_ID = UUID("33333333-3333-3333-3333-333333333333")
+OTHER_UNIT_ID = UUID("44444444-4444-4444-4444-444444444444")
 
 
 @pytest.fixture
@@ -26,7 +28,17 @@ def envs() -> Any:
 
 
 @pytest.fixture
-def service(envs: Any) -> MultiAgentService:
+def admin_core() -> Any:
+    """admin-core double that puts USER_ID in UNIT_ID, the happy path for every test
+    that is not about the unit check itself."""
+
+    client = MagicMock()
+    client.get_unit_id = AsyncMock(return_value=UNIT_ID)
+    return client
+
+
+@pytest.fixture
+def service(envs: Any, admin_core: Any) -> MultiAgentService:
     repository = MagicMock()
     repository.retrieve_messages.return_value = []
     repository.get_preferences.return_value = None
@@ -36,6 +48,7 @@ def service(envs: Any) -> MultiAgentService:
         logger=cast(Any, MagicMock()),
         pdf_renderer=cast(Any, MagicMock()),
         storage_service=cast(Any, MagicMock()),
+        admin_core=cast(Any, admin_core),
     )
 
 
@@ -50,10 +63,47 @@ def _stub_graph(service: MultiAgentService, end_state: dict) -> MagicMock:
     return compiled
 
 
+class TestUnitValidation:
+    """The request only proposes a unit; ms-administrative-core decides. Nothing
+    here may fall back to an unscoped read."""
+
+    def test_rejects_a_unit_that_is_not_the_users(self, service, admin_core):
+        admin_core.get_unit_id = AsyncMock(return_value=OTHER_UNIT_ID)
+        compiled = _stub_graph(service, {})
+
+        with pytest.raises(UnitMismatchException):
+            asyncio.run(service.process_message("olá", USER_ID, THREAD_ID, UNIT_ID, "Bearer test-token"))
+
+        compiled.ainvoke.assert_not_called()
+
+    def test_rejects_when_the_admin_core_cannot_resolve_the_user(self, service, admin_core):
+        admin_core.get_unit_id = AsyncMock(return_value=None)
+        compiled = _stub_graph(service, {})
+
+        with pytest.raises(UnitMismatchException):
+            asyncio.run(service.process_message("olá", USER_ID, THREAD_ID, UNIT_ID, "Bearer test-token"))
+
+        compiled.ainvoke.assert_not_called()
+
+    def test_puts_the_validated_unit_in_the_initial_state(self, service):
+        compiled = _stub_graph(service, {
+            "final_response": "ok",
+            "blocked": False,
+            "blocked_reason": None,
+            "called_agents": [AgentName.ORCHESTRATOR],
+            "report_html": None,
+        })
+
+        asyncio.run(service.process_message("olá", USER_ID, THREAD_ID, UNIT_ID, "Bearer test-token"))
+
+        initial_state = compiled.ainvoke.call_args.args[0]
+        assert initial_state["unit_id"] == str(UNIT_ID)
+
+
 class TestProcessMessage:
     def test_raises_when_the_service_has_not_been_setup(self, service):
         with pytest.raises(MultiAgentServiceNotSetupException):
-            asyncio.run(service.process_message("olá", USER_ID, THREAD_ID))
+            asyncio.run(service.process_message("olá", USER_ID, THREAD_ID, UNIT_ID, "Bearer test-token"))
 
     def test_returns_agent_response_built_from_the_graph_end_state(self, service):
         _stub_graph(service, {
@@ -64,7 +114,7 @@ class TestProcessMessage:
             "report_html": None,
         })
 
-        response = asyncio.run(service.process_message("quais perfis existem?", USER_ID, THREAD_ID))
+        response = asyncio.run(service.process_message("quais perfis existem?", USER_ID, THREAD_ID, UNIT_ID, "Bearer test-token"))
 
         assert response == AgentResponse(
             content="três perfis",
@@ -82,7 +132,7 @@ class TestProcessMessage:
             "report_html": None,
         })
 
-        asyncio.run(service.process_message("olá", USER_ID, THREAD_ID))
+        asyncio.run(service.process_message("olá", USER_ID, THREAD_ID, UNIT_ID, "Bearer test-token"))
 
         _, kwargs = compiled.ainvoke.call_args
         assert kwargs["config"]["configurable"] == {
@@ -99,8 +149,8 @@ class TestProcessMessage:
             "report_html": None,
         })
 
-        asyncio.run(service.process_message("olá", USER_ID, THREAD_ID))
-        asyncio.run(service.process_message("de novo", USER_ID, THREAD_ID))
+        asyncio.run(service.process_message("olá", USER_ID, THREAD_ID, UNIT_ID, "Bearer test-token"))
+        asyncio.run(service.process_message("de novo", USER_ID, THREAD_ID, UNIT_ID, "Bearer test-token"))
 
         # hydration (history/preferences lookup) only happened once; the second call hit the cache.
         service.repository.retrieve_messages.assert_called_once()
@@ -121,7 +171,7 @@ class TestProcessMessage:
             "report_html": None,
         })
 
-        asyncio.run(service.process_message("olá", USER_ID, THREAD_ID))
+        asyncio.run(service.process_message("olá", USER_ID, THREAD_ID, UNIT_ID, "Bearer test-token"))
 
         service.repository.retrieve_messages.assert_called_once_with(
             USER_ID, THREAD_ID, limit=service.envs.SESSION_HISTORY_LIMIT
@@ -143,7 +193,7 @@ class TestProcessMessage:
         service.pdf_renderer.render.return_value = b"%PDF-1.7"
         service.storage_service.upload.return_value = "https://xxxxx.supabase.co/storage/v1/object/public/zera-reports/report.pdf"
 
-        response = asyncio.run(service.process_message("gere o relatório", USER_ID, THREAD_ID))
+        response = asyncio.run(service.process_message("gere o relatório", USER_ID, THREAD_ID, UNIT_ID, "Bearer test-token"))
 
         service.pdf_renderer.render.assert_called_once_with("<html><body>relatório</body></html>")
         _, upload_kwargs = service.storage_service.upload.call_args
@@ -161,7 +211,7 @@ class TestProcessMessage:
             "report_html": None,
         })
 
-        response = asyncio.run(service.process_message("quais perfis existem?", USER_ID, THREAD_ID))
+        response = asyncio.run(service.process_message("quais perfis existem?", USER_ID, THREAD_ID, UNIT_ID, "Bearer test-token"))
 
         service.pdf_renderer.render.assert_not_called()
         service.storage_service.upload.assert_not_called()
@@ -177,7 +227,7 @@ class TestProcessMessage:
         })
         service.pdf_renderer.render.side_effect = PDFRenderException("invalid markup")
 
-        response = asyncio.run(service.process_message("gere o relatório", USER_ID, THREAD_ID))
+        response = asyncio.run(service.process_message("gere o relatório", USER_ID, THREAD_ID, UNIT_ID, "Bearer test-token"))
 
         service.storage_service.upload.assert_not_called()
         assert response.content == "aqui está o relatório"
@@ -194,7 +244,7 @@ class TestProcessMessage:
         service.pdf_renderer.render.return_value = b"%PDF-1.7"
         service.storage_service.upload.side_effect = StorageUploadException("404 Not Found")
 
-        response = asyncio.run(service.process_message("gere o relatório", USER_ID, THREAD_ID))
+        response = asyncio.run(service.process_message("gere o relatório", USER_ID, THREAD_ID, UNIT_ID, "Bearer test-token"))
 
         assert response.content == "aqui está o relatório"
         assert response.report_url is None
@@ -213,7 +263,7 @@ class TestProcessMessage:
         service.thread_cache.sweep = MagicMock(return_value=[expired])
         service._update_preferences = AsyncMock()
 
-        asyncio.run(service.process_message("olá", USER_ID, THREAD_ID))
+        asyncio.run(service.process_message("olá", USER_ID, THREAD_ID, UNIT_ID, "Bearer test-token"))
         asyncio.run(asyncio.sleep(0))  # let the fire-and-forget task run
 
         service._update_preferences.assert_called_once_with(expired)
@@ -255,6 +305,7 @@ class TestSetup:
                 "predict_model": {
                     "url": service.envs.PREDICT_MODEL_MCP_URL,
                     "transport": "streamable_http",
+                    "headers": {"apikey": service.envs.PREDICT_MODEL_API_KEY},
                 }
             }
         )
@@ -280,6 +331,7 @@ class TestFetchPredictModelTools:
         tools = [MagicMock(name="predict_time_to_failure")]
         mock_mcp_client.return_value.get_tools = AsyncMock(return_value=tools)
         service.envs.PREDICT_MODEL_MCP_URL = "https://gateway.zera.internal/predictor"
+        service.envs.PREDICT_MODEL_API_KEY = "predict-key"
 
         result = asyncio.run(service._fetch_predict_model_tools())
 
@@ -288,6 +340,7 @@ class TestFetchPredictModelTools:
                 "predict_model": {
                     "url": "https://gateway.zera.internal/predictor",
                     "transport": "streamable_http",
+                    "headers": {"apikey": "predict-key"},
                 }
             }
         )

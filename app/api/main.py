@@ -4,6 +4,9 @@ from logger.logger import Logger
 from config.environments import Environments
 from _internal.mongo.setup import Repository
 
+# admin-core client (authority on the user's unit)
+from _internal.admin_core.client import AdminCoreClient
+
 # Storage imports
 from _internal.storage.service import SupabaseStorageService
 from _internal.storage.pdf import PdfRenderer
@@ -37,6 +40,9 @@ multi_agent_repository.setup(repository)
 
 myLogger.Info("MultiAgentRepository setup complete")
 
+# create the AdminCoreClient instance
+admin_core_client = AdminCoreClient(envs, myLogger)
+
 # create the multi-agent service instance
 multi_agent_service: IMultiAgentService = MultiAgentService(
     repository=multi_agent_repository,
@@ -44,6 +50,7 @@ multi_agent_service: IMultiAgentService = MultiAgentService(
     logger=myLogger,
     pdf_renderer=pdf_renderer,
     storage_service=storage_service,
+    admin_core=admin_core_client,
 )
 multi_agent_service.setup()
 

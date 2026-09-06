@@ -13,6 +13,9 @@ langchain-mcp-adapters
 # Database
 pymongo
 
+# ms-administrative-core client
+httpx
+
 # Utils
 python-dotenv
 
