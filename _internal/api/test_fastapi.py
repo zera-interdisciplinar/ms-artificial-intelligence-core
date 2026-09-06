@@ -19,6 +19,9 @@ from uuid import uuid4
 
 import httpx
 import pytest
+from dotenv import load_dotenv
+
+load_dotenv()
 from fastapi.testclient import TestClient
 from httpx import Response
 from multi_agent.entity import AgentResponse
