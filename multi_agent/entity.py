@@ -42,6 +42,7 @@ class AgentName(str, Enum):
     FAQ_AGENT = "faq"
     REPORT_AGENT = "report"
     PREDICT_MODEL = "predict_model"
+    INVENTORY_AGENT = "inventory_agent"
     FORMATTER_AGENT = "formatter"
     JUDGE_AGENT = "judge"
     GUARDRAIL_OUT = "guardrail_out"
@@ -101,10 +102,13 @@ class State(MessagesState):
     called_agents: Annotated[list[AgentName], _reset_or_add_list]
     current_request: str | None
     user_preferences: str | None  # rendered long-term memory, seeded on thread hydration
+    unit_id: str | None  # validated against ms-administrative-core
 
     # routing
     next_agent: AgentName | None  # an AgentName value
     intent: str | None
+    pending_agent: AgentName | None  # agent to run after inventory_agent supplies missing detail
+    pending_request: str | None  # original request to resume with, once pending_agent runs
 
     # guardrails
     blocked: bool
@@ -120,6 +124,9 @@ class State(MessagesState):
 
     # predict_model
     predictions: list[PredictionItem]
+
+    # inventory_agent
+    inventory_answer: str | None
 
     # formatter_agent
     formatted_response: str | None

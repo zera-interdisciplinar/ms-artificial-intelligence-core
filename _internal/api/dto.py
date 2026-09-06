@@ -10,6 +10,7 @@ class ProcessMessageRequest(BaseModel):
 
     user_id: UUID
     thread_id: UUID
+    unit_id: UUID  # proposed by the caller, validated against ms-administrative-core
     content: str = Field(min_length=1, max_length=8000)
 
 

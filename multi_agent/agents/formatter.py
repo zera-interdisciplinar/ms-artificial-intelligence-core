@@ -25,6 +25,7 @@ def make_formatter_func(formatter_agent: CompiledStateGraph) -> GraphNodeFunc:
                 "sources",
                 "report_html",
                 "predictions",
+                "inventory_answer",
             )
             if state.get(key) not in (None, [], "")
         }

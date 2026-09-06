@@ -105,3 +105,28 @@ spec:
             secretKeyRef:
               name: ms-artificial-intelligence-core-secrets
               key: PREDICT_MODEL_MCP_URL
+        - name: PREDICT_MODEL_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: ms-artificial-intelligence-core-secrets
+              key: PREDICT_MODEL_API_KEY
+        - name: MS_INVENTORY_MCP_URL
+          valueFrom:
+            secretKeyRef:
+              name: ms-artificial-intelligence-core-secrets
+              key: MS_INVENTORY_MCP_URL
+        - name: MS_INVENTORY_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: ms-artificial-intelligence-core-secrets
+              key: MS_INVENTORY_API_KEY
+        - name: ADMIN_CORE_URL
+          valueFrom:
+            secretKeyRef:
+              name: ms-artificial-intelligence-core-secrets
+              key: ADMIN_CORE_URL
+        - name: ADMIN_CORE_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: ms-artificial-intelligence-core-secrets
+              key: ADMIN_CORE_API_KEY
