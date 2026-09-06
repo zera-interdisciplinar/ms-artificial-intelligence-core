@@ -32,10 +32,10 @@ pytestmark = pytest.mark.integration
 INTEGRATION_USER_ID = os.getenv("INTEGRATION_USER_ID", "")
 INTEGRATION_UNIT_ID = os.getenv("INTEGRATION_UNIT_ID", "")
 
-_ADMIN_CORE_URL = os.getenv("ADMIN_CORE_URL", "")
-_ADMIN_CORE_API_KEY = os.getenv("ADMIN_CORE_API_KEY", "")
-_ADMIN_CORE_SERVICE_EMAIL = os.getenv("ADMIN_CORE_SERVICE_EMAIL", "")
-_ADMIN_CORE_SERVICE_PASSWORD = os.getenv("ADMIN_CORE_SERVICE_PASSWORD", "")
+_ADMIN_CORE_URL = os.getenv("ADMIN_CORE_URL", "").strip()
+_ADMIN_CORE_API_KEY = os.getenv("ADMIN_CORE_API_KEY", "").strip()
+_ADMIN_CORE_SERVICE_EMAIL = os.getenv("ADMIN_CORE_SERVICE_EMAIL", "").strip()
+_ADMIN_CORE_SERVICE_PASSWORD = os.getenv("ADMIN_CORE_SERVICE_PASSWORD", "").strip()
 
 
 @pytest.fixture(scope="module")
@@ -49,7 +49,9 @@ def auth_headers() -> dict:
         headers={"apikey": _ADMIN_CORE_API_KEY},
         timeout=10.0,
     )
-    response.raise_for_status()
+    assert response.status_code == 200, (
+        f"ms-administrative-core login answered {response.status_code}: {response.text}"
+    )
     access_token = response.json()["accessToken"]
     return {"Authorization": f"Bearer {access_token}"}
 
