@@ -59,6 +59,8 @@ jobs:
       MS_INVENTORY_API_KEY: ${{ secrets.MS_INVENTORY_API_KEY }}
       ADMIN_CORE_URL: ${{ secrets.ADMIN_CORE_URL }}
       ADMIN_CORE_API_KEY: ${{ secrets.ADMIN_CORE_API_KEY }}
+      ADMIN_CORE_SERVICE_EMAIL: ${{ secrets.ADMIN_CORE_SERVICE_EMAIL }} # this will be used only in case of integration tests
+      ADMIN_CORE_SERVICE_PASSWORD: ${{ secrets.ADMIN_CORE_SERVICE_PASSWORD }} # this will be used only in case of integration tests
       INTEGRATION_USER_ID: ${{ secrets.INTEGRATION_USER_ID }} # this will be used only in case of integration tests
       INTEGRATION_UNIT_ID: ${{ secrets.INTEGRATION_UNIT_ID }} # this will be used only in case of integration tests
 
