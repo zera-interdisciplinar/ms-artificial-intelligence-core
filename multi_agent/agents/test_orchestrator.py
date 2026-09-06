@@ -94,3 +94,37 @@ class TestOrchestratorFunc:
         assert result["next_agent"] == AgentName.FAQ_AGENT
         assert "final_response" not in result
         assert result["current_request"] == "como funciona o zera?"
+
+    def test_projects_pending_agent_and_pending_request_when_present(self):
+        agent = self._make_agent(
+            '{"intent": "lifetime_prediction", "next_agent": "%s", '
+            '"resolved_request": "Liste os itens do estoque com detalhes.", '
+            '"pending_agent": "%s", "pending_request": "Faça previsão de quebra para todos os itens."}'
+            % (AgentName.INVENTORY_AGENT.value, AgentName.PREDICT_MODEL.value)
+        )
+        orchestrator_func = make_orchestrator_func(agent)
+
+        state = cast(State, {
+            "current_request": "faça previsão de quebra para todos os itens do estoque",
+            "messages": [HumanMessage(content="faça previsão de quebra para todos os itens do estoque")],
+        })
+        result = asyncio.run(orchestrator_func(state))
+
+        assert result["next_agent"] == AgentName.INVENTORY_AGENT
+        assert result["pending_agent"] == AgentName.PREDICT_MODEL
+        assert result["pending_request"] == "Faça previsão de quebra para todos os itens."
+
+    def test_pending_fields_are_none_for_regular_routing(self):
+        agent = self._make_agent(
+            '{"intent": "faq", "next_agent": "%s"}' % AgentName.FAQ_AGENT.value
+        )
+        orchestrator_func = make_orchestrator_func(agent)
+
+        state = cast(State, {
+            "current_request": "como funciona o zera?",
+            "messages": [HumanMessage(content="como funciona o zera?")],
+        })
+        result = asyncio.run(orchestrator_func(state))
+
+        assert result["pending_agent"] is None
+        assert result["pending_request"] is None
