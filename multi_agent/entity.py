@@ -107,6 +107,8 @@ class State(MessagesState):
     # routing
     next_agent: AgentName | None  # an AgentName value
     intent: str | None
+    pending_agent: AgentName | None  # agent to run after inventory_agent supplies missing detail
+    pending_request: str | None  # original request to resume with, once pending_agent runs
 
     # guardrails
     blocked: bool

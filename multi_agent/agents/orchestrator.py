@@ -35,6 +35,7 @@ def make_orchestrator_func(orchestrator_agent: CompiledStateGraph) -> GraphNodeF
         classification = parse_json_message(response["messages"][-1].content)
         _logger.Debug(f"Orchestrator classification={classification}")
 
+        # in case of calling the inventory_agent first only to fetch item detail missing from the original request, the inventory_agent will replace the pending_agent with the next_agent, so the orchestrator doesn't have to know about it.
         next_agent = classification["next_agent"]
 
         result: dict[str, Any] = {
@@ -44,6 +45,8 @@ def make_orchestrator_func(orchestrator_agent: CompiledStateGraph) -> GraphNodeF
             # self-contained request, with conversational references (if any) already
             # resolved by the orchestrator; downstream agents never see message history.
             "current_request": classification.get("resolved_request") or current_request,
+            "pending_agent": classification.get("pending_agent"),
+            "pending_request": classification.get("pending_request"),
         }
 
         if next_agent == AgentName.END:

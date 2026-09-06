@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from multi_agent.entity import AgentName, State
-from multi_agent.agents.inventory import make_inventory_func
+from multi_agent.agents.inventory import make_inventory_func, inventory_fate_decision
 from multi_agent.unit_scope import current_unit_id, set_unit_id
 
 
@@ -26,11 +26,12 @@ class TestInventoryFunc:
         })
         inventory_func = make_inventory_func(inventory_agent)
 
-        result = asyncio.run(inventory_func(cast(State, {"current_request": "status do notebook NB-4521"})))
+        result = asyncio.run(inventory_func(cast(State, {"current_request": "status do notebook NB-4521", "pending_agent": None})))
 
         assert result == {
             "called_agents": [AgentName.INVENTORY_AGENT],
             "inventory_answer": "O notebook NB-4521 está classificado como 'em uso', localizado no setor de TI.",
+            "next_agent": AgentName.FORMATTER_AGENT,
         }
 
     def test_parses_answer_when_no_item_is_found(self):
@@ -61,6 +62,31 @@ class TestInventoryFunc:
 
         with pytest.raises(json.JSONDecodeError):
             asyncio.run(inventory_func(cast(State, {"current_request": "status do notebook NB-4521"})))
+
+
+class TestInventoryChaining:
+    def test_resumes_pending_agent_with_inventory_data_appended(self):
+        inventory_agent = MagicMock()
+        inventory_agent.ainvoke = AsyncMock(return_value={
+            "messages": [MagicMock(content=json.dumps({"answer": "NB-4521: notebook, categoria eletrônico."}))]
+        })
+        inventory_func = make_inventory_func(inventory_agent)
+
+        result = asyncio.run(inventory_func(cast(State, {
+            "current_request": "liste dados do NB-4521",
+            "pending_agent": AgentName.PREDICT_MODEL,
+            "pending_request": "Faça uma previsão de quebra para o NB-4521.",
+        })))
+
+        assert result["next_agent"] == AgentName.PREDICT_MODEL
+        assert result["pending_agent"] is None
+        assert result["pending_request"] is None
+        assert "Faça uma previsão de quebra para o NB-4521." in result["current_request"]
+        assert "NB-4521: notebook, categoria eletrônico." in result["current_request"]
+
+    def test_fate_decision_follows_next_agent(self):
+        assert inventory_fate_decision(cast(State, {"next_agent": AgentName.PREDICT_MODEL})) == AgentName.PREDICT_MODEL
+        assert inventory_fate_decision(cast(State, {"next_agent": AgentName.FORMATTER_AGENT})) == AgentName.FORMATTER_AGENT
 
 
 class TestUnitScope:

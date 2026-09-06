@@ -55,7 +55,7 @@ from .entity import AgentName
 from .agents.guardrail import Guardrail
 from .agents.orchestrator import make_orchestrator_func, orchestrator_fate_decision
 from .agents.predict_model import make_predict_model_func
-from .agents.inventory import make_inventory_func
+from .agents.inventory import make_inventory_func, inventory_fate_decision
 from .agents.faq import FAQ
 from .agents.report import make_report_func
 from .agents.formatter import make_formatter_func
@@ -326,7 +326,16 @@ class MultiAgentService(IMultiAgentService):
         new_graph.add_edge(AgentName.PREDICT_MODEL, AgentName.FORMATTER_AGENT)
         new_graph.add_edge(AgentName.REPORT_AGENT, AgentName.FORMATTER_AGENT)
         new_graph.add_edge(AgentName.FAQ_AGENT, AgentName.FORMATTER_AGENT)
-        new_graph.add_edge(AgentName.INVENTORY_AGENT, AgentName.FORMATTER_AGENT)
+
+        new_graph.add_conditional_edges(
+            AgentName.INVENTORY_AGENT,
+
+            inventory_fate_decision,
+            {
+                AgentName.PREDICT_MODEL: AgentName.PREDICT_MODEL,
+                AgentName.FORMATTER_AGENT: AgentName.FORMATTER_AGENT,
+            }
+        )
 
         new_graph.add_edge(AgentName.FORMATTER_AGENT, AgentName.JUDGE_AGENT)
 
@@ -463,6 +472,8 @@ class MultiAgentService(IMultiAgentService):
                 "unit_id": str(unit_id),
                 "next_agent": None,
                 "intent": None,
+                "pending_agent": None,
+                "pending_request": None,
                 "blocked": False,
                 "blocked_reason": None,
                 "pii_map": {},
