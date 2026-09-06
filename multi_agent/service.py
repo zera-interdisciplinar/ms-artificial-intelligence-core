@@ -143,6 +143,13 @@ class MultiAgentService(IMultiAgentService):
         tools = await self._fetch_predict_model_tools()
         tools_by_name: dict[str, BaseTool] = {tool.name: tool for tool in tools}
 
+        required = {"list_valid_categories", "list_valid_climate_zones", "predict_time_to_failure_batch"}
+        missing = required - tools_by_name.keys()
+        assert not missing, (
+            f"predict_model MCP did not return the expected tools (missing: {sorted(missing)}, "
+            f"got: {sorted(tools_by_name.keys())})"
+        )
+
         categories: list[str] = await tools_by_name["list_valid_categories"].ainvoke({})
         climate_zones: list[str] = await tools_by_name["list_valid_climate_zones"].ainvoke({})
 
