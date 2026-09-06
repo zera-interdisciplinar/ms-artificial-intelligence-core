@@ -75,10 +75,15 @@ class IMultiAgentService(Protocol):
         ...
 
     async def process_message(
-        self, message: str, user_id: UUID, thread_id: UUID
+        self, message: str, user_id: UUID, thread_id: UUID, unit_id: UUID, authorization: str
     ) -> AgentResponse:
         """
         Process a message and return the response from the multi-agent system.
+        unit_id is the unit the caller claims the user belongs to; it is validated
+        against ms-administrative-core before anything else runs. authorization is
+        the caller's Authorization header, forwarded as-is to ms-administrative-core --
+        this service never authenticates on the caller's behalf.
         Raise MultiAgentServiceException if the processing fails.
+        Raise UnitMismatchException if unit_id is not the user's unit.
         """
         ...
