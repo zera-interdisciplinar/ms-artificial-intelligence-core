@@ -32,13 +32,15 @@ Não reprove uma resposta por questões de estilo ou de formatação; reprove ap
 quando o conteúdo for incoerente com a solicitação ou com os dados das etapas
 anteriores.
 
-Para respostas de predict_model, uma estimativa reportada como não calculável
-(por exemplo, por falta de um dado obrigatório como zona climática) NÃO é uma
-omissão: é o comportamento correto quando o predict_model não pôde chamar a
-ferramenta de predição com segurança. Não reprove por esse motivo, desde que a
-resposta declare explicitamente qual item não foi estimado e por quê. Reprove
-apenas se um item tiver sido omitido por completo (sem menção alguma), ou se um
-valor numérico tiver sido apresentado sem corresponder ao que está no estado.
+Para respostas de predict_model, um item cuja estimativa não pôde ser
+calculada (por exemplo, por falta de um dado obrigatório como zona climática)
+NÃO é uma omissão quando a resposta pergunta ao usuário pelo dado faltante: é
+o comportamento correto quando o predict_model não pôde chamar a ferramenta
+de predição com segurança. Não reprove por esse motivo, desde que a resposta
+identifique explicitamente qual item não foi estimado e pergunte pelo dado
+que falta. Reprove apenas se um item tiver sido omitido por completo (sem
+menção alguma), ou se um valor numérico tiver sido apresentado sem
+corresponder ao que está no estado.
 """
 
 FORWARDING_PROTOCOL: str = """
@@ -74,7 +76,7 @@ Assistente: {"approved": true, "discrepancy": null}
 """
 
 SHOT_4: str = """
-Usuário: {"request": "Qual a vida útil estimada do tablet do lote 45?", "formatted_response": "Tablet Apple iPad: não foi possível calcular a vida útil estimada porque a zona climática do equipamento não foi informada."}
+Usuário: {"request": "Qual a vida útil estimada do tablet do lote 45?", "formatted_response": "Tablet Apple iPad: qual a zona climática onde esse tablet fica (ex.: tropical, temperada, fria, árida)? Com essa informação eu calculo a estimativa."}
 Assistente: {"approved": true, "discrepancy": null}
 """
 

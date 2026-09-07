@@ -22,11 +22,20 @@ chame ferramentas externas; a formatação opera apenas sobre os dados já prese
 no estado.
 
 Para itens vindos de predict_model com estimated_remaining_months igual a
-null, NÃO omita o item nem invente um número: informe explicitamente que a
-estimativa não pôde ser calculada para aquele item e inclua o motivo em
-linguagem natural, com base em adjustment_reason (ex.: dado de zona climática
-não informado). Para itens com adjusted igual a true e
-estimated_remaining_months numérico, mencione que o valor foi ajustado.
+null, NÃO omita o item nem invente um número. `adjustment_reason` chega como
+um motivo técnico cru (ex.: "climateZone não informado (válidos: tropical,
+temperada, ...)"), e é SUA responsabilidade decidir como apresentá-lo:
+- Se o motivo indica um dado que o usuário pode fornecer para completar a
+  previsão (campo ausente ou valor fora do vocabulário aceito), formule uma
+  pergunta direta e específica ao usuário pedindo esse dado, já citando os
+  valores válidos quando o motivo os incluir. Não apenas declare que a
+  previsão "não pôde ser calculada" — pergunte pelo dado que falta, para que o
+  usuário possa responder e a previsão seja completada no próximo turno.
+- Se o motivo vier de um erro da ferramenta ou de outra causa que o usuário
+  não pode resolver fornecendo mais dados, informe isso de forma direta, sem
+  transformar em pergunta.
+Para itens com adjusted igual a true e estimated_remaining_months numérico,
+mencione que o valor foi ajustado.
 
 Sua saída é avaliada por judge_agent e não retorna para você: não há uma segunda
 tentativa de formatação. Inclua todo o conteúdo relevante presente no estado, pois
@@ -66,13 +75,18 @@ Assistente: {"formatted_response": "Relatório de Descarte — Lote 45\\n\\nO Lo
 """
 
 SHOT_4: str = """
-Usuário (estado de predict_model): {"predictions": [{"item": "Tablet Apple iPad", "estimated_remaining_months": null, "adjusted": true, "adjustment_reason": "climate_zone_not_provided"}]}
-Assistente: {"formatted_response": "Tablet Apple iPad: não foi possível calcular a vida útil estimada porque a zona climática do equipamento não foi informada."}
+Usuário (estado de predict_model): {"predictions": [{"item": "Tablet Apple iPad", "estimated_remaining_months": null, "adjusted": false, "adjustment_reason": "climateZone não informado (válidos: tropical, temperada, fria, árida)"}]}
+Assistente: {"formatted_response": "Tablet Apple iPad: qual a zona climática onde esse tablet fica? As opções são tropical, temperada, fria ou árida — me informe para eu calcular a estimativa."}
 """
 
 SHOT_5: str = """
 Usuário (estado de inventory_agent): {"inventory_answer": "O notebook NB-4521 está classificado como 'em uso', localizado no setor de TI, adquirido em 2021 e sem pendências de manutenção registradas."}
 Assistente: {"formatted_response": "O notebook NB-4521 está classificado como 'em uso', localizado no setor de TI, adquirido em 2021 e sem pendências de manutenção registradas."}
+"""
+
+SHOT_6: str = """
+Usuário (estado de predict_model): {"predictions": [{"item": "Monitor Dell", "estimated_remaining_months": null, "adjusted": false, "adjustment_reason": "erro da ferramenta: servidor de previsão (sdk-ml-failure-predictor) indisponível no momento"}]}
+Assistente: {"formatted_response": "Monitor Dell: não foi possível calcular a vida útil estimada agora devido a um erro no serviço de previsão. Tente novamente em instantes."}
 """
 
 FORMATTER_AGENT_SYSTEM_PROMPT_FINAL: str = f"""{GENERAL_SYSTEM_PROMPT}
@@ -95,5 +109,7 @@ SHOTS_OPEN
 {SHOT_4}
 
 {SHOT_5}
+
+{SHOT_6}
 SHOTS_END
 """

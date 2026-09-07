@@ -67,9 +67,12 @@ Para cada item extraído:
 5. Um item é ELEGÍVEL para a ferramenta somente se, após os passos 1-4, TODOS
    os 7 campos estiverem preenchidos (nenhum null). Um item com qualquer campo
    inválido/ausente NÃO é enviado à ferramenta — ele entra na resposta final
-   com `estimated_remaining_months: null` e `adjustment_reason` explicando
-   exatamente quais campos impediram a previsão (ex.: "category fora do
-   vocabulário conhecido", "acquiredAt não informado").
+   com `estimated_remaining_months: null` e `adjustment_reason` indicando
+   exatamente qual(is) campo(s) impediram a previsão e, quando aplicável, os
+   valores válidos aceitos (ex.: "category fora do vocabulário conhecido
+   (válidos: notebook, tablet, ...)", "climateZone não informado (válidos:
+   tropical, temperada, ...)"). Você apenas relata o problema; não formula
+   pergunta ao usuário — isso é responsabilidade do formatter_agent.
 """
 
 TOOL_CALL_PROTOCOL: str = """
@@ -119,13 +122,13 @@ Assistente: {"predictions": [{"item": "Celular Samsung Galaxy", "estimated_remai
 SHOT_3: str = """
 Usuário: "Qual a vida útil estimada de um tablet Apple iPad, fabricado em 2020, adquirido em 2021-04-12? Não sei em que tipo de clima ele fica."
 [climateZone não foi informado (null): item é inelegível, NÃO é enviado à ferramenta]
-Assistente: {"predictions": [{"item": "Tablet Apple iPad", "estimated_remaining_months": null, "adjusted": false, "adjustment_reason": "climateZone não informado"}]}
+Assistente: {"predictions": [{"item": "Tablet Apple iPad", "estimated_remaining_months": null, "adjusted": false, "adjustment_reason": "climateZone não informado (válidos: tropical, temperada, fria, árida)"}]}
 """
 
 SHOT_4: str = """
 Usuário: "Estime a vida útil restante do monitor Samsung, zona climática temperada, uso 5, fabricado em 2021, adquirido em 2022-03-10; e da geladeira Brastemp, zona climática fria, uso 6, fabricada em 2020, adquirida em 2021-05-20."
 [o primeiro item é elegível; "geladeira" não corresponde a nenhuma categoria conhecida do modelo, então esse item é inelegível. Apenas o item do monitor é enviado à ferramenta, recebendo [22.0] de volta]
-Assistente: {"predictions": [{"item": "Monitor Samsung", "estimated_remaining_months": 22, "adjusted": false, "adjustment_reason": null}, {"item": "Geladeira Brastemp", "estimated_remaining_months": null, "adjusted": false, "adjustment_reason": "category fora do vocabulário conhecido pelo modelo"}]}
+Assistente: {"predictions": [{"item": "Monitor Samsung", "estimated_remaining_months": 22, "adjusted": false, "adjustment_reason": null}, {"item": "Geladeira Brastemp", "estimated_remaining_months": null, "adjusted": false, "adjustment_reason": "category fora do vocabulário conhecido pelo modelo (válidos: notebook, celular, tablet, monitor, entre outras suportadas)"}]}
 """
 
 def build_predict_model_system_prompt(categories: list[str], climate_zones: list[str]) -> str:
