@@ -48,6 +48,26 @@ faq é dúvida sobre o funcionamento/processo/política geral do sistema Zera,
 enquanto inventory_search é sobre o dado concreto de um item real do
 inventário da empresa do usuário.
 
+Se a pergunta atual usa uma referência a um item/lote já identificado
+no histórico (ex.: "ele", "esse", "esses itens"), SEMPRE substitua a referência
+pela identificação concreta encontrada no histórico ao montar
+"resolved_request", mesmo que os demais dados necessários para a execução
+(categoria, zona climática, datas, etc.) ainda não estejam disponíveis — nesse
+caso o agente especializado é quem vai pedir ao usuário os dados que faltam,
+você não pode devolver "unclassified" nem deixar a referência não resolvida.
+
+Se a pergunta atual não pede uma nova execução (novo relatório, nova previsão,
+nova consulta ao inventário), mas sim uma dúvida sobre um dado de inventário
+já apresentado antes na conversa (ex.: "esses itens que você listou têm
+garantia vencendo em breve?"), encaminhe para inventory_agent, com
+"resolved_request" incorporando o dado relevante do histórico como fato já
+dado — inventory_agent também responde dúvidas sobre o que já entregou, não
+só executa uma nova consulta. Para qualquer outra dúvida sobre um resultado já
+obtido na conversa (ex.: uma previsão de vida útil já feita, um relatório já
+gerado) ou sobre o funcionamento/processo/política geral do Zera, encaminhe
+para faq_agent, também incorporando o dado relevante do histórico como fato
+já dado em "resolved_request".
+
 Se a solicitação for de lifetime_prediction mas se referir a itens de forma
 genérica (ex.: "todos os itens do estoque", "cada item", "os produtos que
 estão lá") sem detalhes concretos (categoria, patrimônio, características)
@@ -143,6 +163,11 @@ Usuário: "Para cada um desses itens, faça uma previsão de quebra."
 Assistente: {{"intent": "lifetime_prediction", "next_agent": "{AgentName.INVENTORY_AGENT.value}", "resolved_request": "Liste os itens do estoque (NB-4521, NB-4522, NB-4530, BAT-10, BAT-11) com categoria, características e demais dados necessários para previsão de vida útil.", "pending_agent": "{AgentName.PREDICT_MODEL.value}", "pending_request": "Faça uma previsão de quebra para os itens NB-4521, NB-4522, NB-4530, BAT-10 e BAT-11."}}
 """
 
+SHOT_2I: str = f"""
+Usuário: "Faça uma previsão de vida útil para todos os itens do estoque."
+Assistente: {{"intent": "lifetime_prediction", "next_agent": "{AgentName.INVENTORY_AGENT.value}", "resolved_request": "Liste todos os itens do estoque com categoria, características e demais dados necessários para previsão de vida útil.", "pending_agent": "{AgentName.PREDICT_MODEL.value}", "pending_request": "Faça uma previsão de vida útil para todos os itens do estoque."}}
+"""
+
 SHOT_2D: str = f"""
 Usuário: "O notebook de patrimônio NB-4521 está em uso ou disponível?"
 Assistente: {{"intent": "inventory_search", "next_agent": "{AgentName.INVENTORY_AGENT.value}", "resolved_request": "O notebook de patrimônio NB-4521 está em uso ou disponível?"}}
@@ -151,6 +176,24 @@ Assistente: {{"intent": "inventory_search", "next_agent": "{AgentName.INVENTORY_
 SHOT_2E: str = f"""
 Usuário: "Quais são os produtos que temos no nosso estoque?"
 Assistente: {{"intent": "inventory_search", "next_agent": "{AgentName.INVENTORY_AGENT.value}", "resolved_request": "Quais são os produtos que temos no nosso estoque?"}}
+"""
+
+SHOT_2G: str = f"""
+[Histórico recente da conversa:
+Usuário: Quais são os projetores que tenho no meu estoque?
+Assistente: Você tem 2 projetores: Epson PowerLite (patrimônio PRJ-01) e BenQ MX550 (patrimônio PRJ-02).]
+
+Usuário: "Faça uma previsão para ele."
+Assistente: {{"intent": "lifetime_prediction", "next_agent": "{AgentName.PREDICT_MODEL.value}", "resolved_request": "Faça uma previsão de vida útil para o projetor Epson PowerLite (patrimônio PRJ-01)."}}
+"""
+
+SHOT_2H: str = f"""
+[Histórico recente da conversa:
+Usuário: Faça uma previsão para meu monitor Samsung, zona climática temperada, uso 5, fabricado em 2021, adquirido em 2022-03-10.
+Assistente: A previsão de vida útil restante para o monitor Samsung é de aproximadamente 68 meses.]
+
+Usuário: "Quando devo fazer a manutenção preventiva, visto isso?"
+Assistente: {{"intent": "faq", "next_agent": "{AgentName.FAQ_AGENT.value}", "resolved_request": "Meu monitor Samsung tem uma previsão de vida útil restante de 68 meses. Quando devo fazer a manutenção preventiva?"}}
 """
 
 SHOT_3: str = f"""
@@ -177,11 +220,17 @@ SHOTS_OPEN
 
 {SHOT_2C}
 
+{SHOT_2I}
+
 {SHOT_2D}
 
 {SHOT_2E}
 
 {SHOT_2F}
+
+{SHOT_2G}
+
+{SHOT_2H}
 
 {SHOT_3}
 SHOTS_END
