@@ -40,7 +40,7 @@ class AdminCoreClient:
         cached = self._cache.get(user_id)
         if cached is not None and time.monotonic() - cached[1] < _CACHE_TTL_SECONDS:
             # in this case, we update the timestamp to extend the cache lifetime, but we don't need to re-fetch
-            self._cache[user_id] = (cached[1], time.monotonic())
+            self._cache[user_id] = (cached[0], time.monotonic())
 
             return cached[0]
 
