@@ -1,0 +1,4 @@
+{
+  "name": "ms-artificial-intelligence-core",
+  "install": "bash .cursor/install.sh"
+}
