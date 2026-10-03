@@ -70,8 +70,8 @@ Assistente: {"formatted_response": "Notebook Dell Latitude 5420: vida útil esti
 """
 
 SHOT_3: str = """
-Usuário (estado de report_agent): {"report_html": "<!DOCTYPE html><html lang=\\"pt-BR\\"><head><meta charset=\\"utf-8\\" /><title>Relatório</title></head><body><header><h1>Relatório de Descarte — Lote 45</h1></header><main><p>O Lote 45 contém 12 notebooks classificados como descartáveis.</p></main><footer><p>Relatório gerado a partir dos dados de inventário registrados no sistema Zera.</p></footer></body></html>"}
-Assistente: {"formatted_response": "Relatório de Descarte — Lote 45\\n\\nO Lote 45 contém 12 notebooks classificados como descartáveis.\\n\\nRelatório gerado a partir dos dados de inventário registrados no sistema Zera."}
+Usuário (estado de report_agent): {"report_html": "<html>Cotação de equipamentos. Número de cotação: Lote 45. Notebooks: 12 unidades.</html>"}
+Assistente: {"formatted_response": "Cotação de equipamentos — Lote 45.\\n\\nNotebooks: 12 unidades selecionadas para descarte."}
 """
 
 SHOT_4: str = """
