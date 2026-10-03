@@ -1,4 +1,4 @@
-from multi_agent.entity import ConversationPage, ConversationPreview, Message, UserPreferences
+from multi_agent.entity import ConversationPage, ConversationPreview, DisposalReport, Message, UserPreferences
 from _internal.mongo.setup import Repository
 from pymongo.collection import Collection
 from repository.exception import RepositoryReadException, RepositorySaveException
@@ -15,6 +15,7 @@ class MultiAgentRepository():
     repository: Repository
     messageCollection: Collection
     preferencesCollection: Collection
+    disposalReportCollection: Collection
 
     def setup(self, repository: Repository) -> None:
         """
@@ -24,9 +25,11 @@ class MultiAgentRepository():
         self.repository = repository
         self.messageCollection = self.repository.db["messages"]
         self.preferencesCollection = self.repository.db["user_preferences"]
+        self.disposalReportCollection = self.repository.db["disposal_reports"]
 
         self.messageCollection.create_index([("user_id", 1), ("thread_id", 1), ("created_at", -1)])
         self.preferencesCollection.create_index([("user_id", 1)], unique=True)
+        self.disposalReportCollection.create_index([("disposal_id", 1)], unique=True)
 
     def save_message(
             self,
@@ -135,3 +138,26 @@ class MultiAgentRepository():
             )
         except Exception as e:
             raise RepositorySaveException(f"Failed to save preferences: {e}")
+
+    def save_disposal_report(self, report: DisposalReport) -> None:
+        """
+        Save the stored PDF of one disposal.
+        Raise RepositorySaveException if the save fails.
+        """
+        try:
+            doc = report.model_dump(mode="python")
+            doc["user_id"] = str(doc["user_id"])
+            self.disposalReportCollection.insert_one(doc)
+        except Exception as e:
+            raise RepositorySaveException(f"Failed to save disposal report: {e}")
+
+    def get_disposal_report(self, disposal_id: str) -> DisposalReport | None:
+        """
+        The stored report for this disposal, or None if it was never generated.
+        Raise RepositoryReadException if the retrieval fails.
+        """
+        try:
+            doc = self.disposalReportCollection.find_one({"disposal_id": disposal_id})
+            return DisposalReport.model_validate(doc) if doc else None
+        except Exception as e:
+            raise RepositoryReadException(f"Failed to retrieve disposal report: {e}")

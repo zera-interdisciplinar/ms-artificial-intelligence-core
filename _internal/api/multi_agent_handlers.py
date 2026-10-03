@@ -7,6 +7,8 @@ from multi_agent.multi_agent import IMultiAgentService
 from .dto import (
     ConversationListResponse,
     ConversationMessageResponse,
+    DisposalReportRequest,
+    DisposalReportResponse,
     ProcessMessageRequest,
     ProcessMessageResponse,
 )
@@ -60,5 +62,25 @@ def multi_agent_handlers(service: IMultiAgentService) -> APIRouter:
             ConversationMessageResponse(role=message.role, content=message.content, created_at=message.created_at)
             for message in messages
         ]
+
+    return new_router
+
+
+def report_handlers(service: IMultiAgentService) -> APIRouter:
+    new_router = APIRouter(prefix="/reports", tags=["reports"])
+
+    @new_router.post("")
+    async def create_disposal_report_endpoint(request: DisposalReportRequest) -> DisposalReportResponse:
+        """Generate the PDF for a disposal, or return the URL already stored for that id."""
+        report_url = await service.create_disposal_report(request.user_id, request.disposal_id)
+        return DisposalReportResponse(report_url=report_url)
+
+    @new_router.get("/{disposal_id}")
+    async def get_disposal_report_endpoint(disposal_id: str) -> DisposalReportResponse:
+        """The stored PDF URL for this disposal."""
+        report_url = service.get_disposal_report(disposal_id)
+        if report_url is None:
+            raise HTTPException(status_code=404, detail="disposal report not found")
+        return DisposalReportResponse(report_url=report_url)
 
     return new_router

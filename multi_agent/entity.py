@@ -88,6 +88,15 @@ class Message(BaseModel):
     agent: AgentName | None = None
     created_at: datetime
 
+class DisposalReport(BaseModel):
+    """A report generated for one disposal and stored as a PDF."""
+
+    disposal_id: str
+    user_id: UUID
+    report_url: str
+    created_at: datetime
+
+
 class UserPreferences(BaseModel):
     """Long-term, cross-conversation memory about a user: writing style, company
     context and recurring requests. Updated out-of-band (fire-and-forget)

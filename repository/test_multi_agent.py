@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 import pytest
 from pymongo.errors import PyMongoError
 
-from multi_agent.entity import ConversationPage, ConversationPreview, Message, Role, UserPreferences
+from multi_agent.entity import ConversationPage, ConversationPreview, DisposalReport, Message, Role, UserPreferences
 from repository.exception import RepositoryException
 from repository.multi_agent import MultiAgentRepository
 
@@ -24,6 +24,7 @@ class TestSetup:
         assert repository.repository is mongo_repository
         assert repository.messageCollection is mongo_repository.db["messages"]
         assert repository.preferencesCollection is mongo_repository.db["user_preferences"]
+        assert repository.disposalReportCollection is mongo_repository.db["disposal_reports"]
 
     def test_creates_the_expected_indexes(self, mongo_repository):
         repository = MultiAgentRepository()
@@ -35,6 +36,9 @@ class TestSetup:
         )
         repository.preferencesCollection.create_index.assert_called_once_with(
             [("user_id", 1)], unique=True
+        )
+        repository.disposalReportCollection.create_index.assert_called_once_with(
+            [("disposal_id", 1)], unique=True
         )
 
 
@@ -204,3 +208,41 @@ class TestPreferences:
 
         with pytest.raises(RepositoryException, match="Failed to save preferences"):
             repo.upsert_preferences(preferences)
+
+
+class TestDisposalReport:
+    def test_inserts_the_report_with_a_stringified_user_id(self, repo, user_id):
+        report = DisposalReport(
+            disposal_id="42",
+            user_id=user_id,
+            report_url="https://storage/disposal-42.pdf",
+            created_at=datetime.now(timezone.utc),
+        )
+
+        repo.save_disposal_report(report)
+
+        document = repo.disposalReportCollection.insert_one.call_args.args[0]
+        assert document["disposal_id"] == "42"
+        assert document["user_id"] == str(user_id)
+        assert document["report_url"] == "https://storage/disposal-42.pdf"
+
+    def test_returns_the_stored_report(self, repo, user_id):
+        created_at = datetime.now(timezone.utc)
+        repo.disposalReportCollection.find_one.return_value = {
+            "disposal_id": "42",
+            "user_id": str(user_id),
+            "report_url": "https://storage/disposal-42.pdf",
+            "created_at": created_at,
+        }
+
+        report = repo.get_disposal_report("42")
+
+        assert report is not None
+        assert report.disposal_id == "42"
+        assert report.report_url == "https://storage/disposal-42.pdf"
+        repo.disposalReportCollection.find_one.assert_called_once_with({"disposal_id": "42"})
+
+    def test_returns_none_when_the_disposal_has_no_report(self, repo):
+        repo.disposalReportCollection.find_one.return_value = None
+
+        assert repo.get_disposal_report("42") is None

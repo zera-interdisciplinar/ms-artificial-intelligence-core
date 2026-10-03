@@ -50,6 +50,7 @@ def mongo_repository():
     collections = {
         "messages": MagicMock(name="messageCollection"),
         "user_preferences": MagicMock(name="preferencesCollection"),
+        "disposal_reports": MagicMock(name="disposalReportCollection"),
     }
     repository.db.__getitem__.side_effect = collections.__getitem__
     return repository

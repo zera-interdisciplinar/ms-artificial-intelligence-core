@@ -17,6 +17,19 @@ class ProcessMessageRequest(BaseModel):
     content: str = Field(min_length=1, max_length=8000)
 
 
+class DisposalReportRequest(BaseModel):
+    """Body of POST /reports."""
+
+    user_id: UUID
+    disposal_id: str = Field(min_length=1)
+
+
+class DisposalReportResponse(BaseModel):
+    """URL of a disposal report PDF."""
+
+    report_url: str
+
+
 class ProcessMessageResponse(BaseModel):
     """Response of POST /multi-agent/process-message."""
 

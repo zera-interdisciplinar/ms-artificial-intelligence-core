@@ -3,7 +3,7 @@ Define the interface for multi-agent contracts and repository (interface).
 """
 
 from typing import Optional, Protocol, runtime_checkable
-from .entity import ConversationPage, Message, AgentResponse, State, UserPreferences
+from .entity import ConversationPage, DisposalReport, Message, AgentResponse, State, UserPreferences
 from uuid import UUID
 
 from langgraph.graph import StateGraph
@@ -70,6 +70,20 @@ class IMultiAgentRepository(Protocol):
         """
         ...
 
+    def save_disposal_report(self, report: DisposalReport) -> None:
+        """
+        Save the stored PDF of one disposal.
+        Raise RepositorySaveException if the save fails.
+        """
+        ...
+
+    def get_disposal_report(self, disposal_id: str) -> DisposalReport | None:
+        """
+        The stored report for this disposal, or None if it was never generated.
+        Raise RepositoryReadException if the retrieval fails.
+        """
+        ...
+
 
 @runtime_checkable
 class IMultiAgentService(Protocol):
@@ -99,4 +113,15 @@ class IMultiAgentService(Protocol):
         Raise MultiAgentServiceException if the processing fails.
         Raise UnitMismatchException if unit_id is not the user's unit.
         """
+        ...
+
+    async def create_disposal_report(self, user_id: UUID, disposal_id: str) -> str:
+        """
+        Generate and store the PDF for one disposal, or return the URL already stored.
+        Raise MultiAgentServiceException if generation or upload fails.
+        """
+        ...
+
+    def get_disposal_report(self, disposal_id: str) -> str | None:
+        """The stored PDF URL for this disposal, or None if it was never generated."""
         ...

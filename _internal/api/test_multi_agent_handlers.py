@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 from multi_agent.entity import AgentResponse, ConversationPage, ConversationPreview, Message, Role
 from multi_agent.exception import UnitMismatchException
 
-from _internal.api.multi_agent_handlers import multi_agent_handlers
+from _internal.api.multi_agent_handlers import multi_agent_handlers, report_handlers
 
 
 def _client(service: MagicMock) -> TestClient:
@@ -146,3 +146,42 @@ class TestConversationEndpoints:
 
         assert response.status_code == 422
         service.repository.list_conversations.assert_not_called()
+
+
+def _report_client(service: MagicMock) -> TestClient:
+    app = FastAPI()
+    app.include_router(report_handlers(service))
+    return TestClient(app)
+
+
+class TestDisposalReportEndpoints:
+    def test_creates_the_report_and_returns_its_url(self):
+        service = MagicMock()
+        service.create_disposal_report = AsyncMock(return_value="https://storage/disposal-42.pdf")
+        user_id = uuid4()
+
+        response = _report_client(service).post(
+            "/reports", json={"user_id": str(user_id), "disposal_id": "42"}
+        )
+
+        assert response.status_code == 200
+        assert response.json() == {"report_url": "https://storage/disposal-42.pdf"}
+        service.create_disposal_report.assert_awaited_once()
+        assert service.create_disposal_report.await_args.args[1] == "42"
+
+    def test_returns_the_stored_url(self):
+        service = MagicMock()
+        service.get_disposal_report.return_value = "https://storage/disposal-42.pdf"
+
+        response = _report_client(service).get("/reports/42")
+
+        assert response.status_code == 200
+        assert response.json()["report_url"] == "https://storage/disposal-42.pdf"
+
+    def test_answers_404_when_the_disposal_has_no_report(self):
+        service = MagicMock()
+        service.get_disposal_report.return_value = None
+
+        response = _report_client(service).get("/reports/42")
+
+        assert response.status_code == 404
