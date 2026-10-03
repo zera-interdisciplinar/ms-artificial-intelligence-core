@@ -48,15 +48,28 @@ def with_preferences(text: str, preferences: str | None) -> str:
     return f"[Preferências de longo prazo do usuário: {preferences}]\n\n{text}"
 
 
-def render_history(messages: list[BaseMessage], limit: int) -> str:
-    """Renders the last `limit` Human/AI turns as plain-text lines, for the one
-    agent (orchestrator) that resolves conversational references ("esse aí")
-    into a self-contained request. Other agents never see this — they get the
-    already-resolved current_request."""
+def render_history(messages: list[BaseMessage]) -> str:
+    """Renders every Human/AI turn as plain-text lines."""
 
     turns = [
         f"Usuário: {m.content}" if isinstance(m, HumanMessage) else f"Assistente: {m.content}"
         for m in messages
         if isinstance(m, (HumanMessage, AIMessage))
     ]
-    return "\n".join(turns[-limit:])
+    return "\n".join(turns)
+
+
+def request_with_history(
+    current_request: str,
+    messages: list[BaseMessage] | None,
+    preferences: str | None = None,
+) -> str:
+    """Prefixes the current request with every prior turn in the graph state.
+    The last message is this turn's own input, already represented by
+    current_request (which may have been rewritten by the orchestrator)."""
+
+    history = render_history(list(messages or [])[:-1])
+    body = with_preferences(current_request, preferences)
+    if not history:
+        return body
+    return f"[Histórico recente da conversa:\n{history}]\n\n{body}"

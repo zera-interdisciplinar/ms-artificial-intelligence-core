@@ -3,7 +3,7 @@ from typing import Any
 from langgraph.graph.state import CompiledStateGraph
 
 from ..entity import State, AgentName, PredictionItem, GraphNodeFunc
-from .message_utils import parse_json_message
+from .message_utils import parse_json_message, request_with_history
 from logger.logger import Logger
 
 # module-level logger instance
@@ -20,7 +20,10 @@ def make_predict_model_func(predict_model_agent: CompiledStateGraph) -> GraphNod
     """
 
     async def predict_model_func(state: State) -> dict[str, Any]:
-        response = await predict_model_agent.ainvoke({"messages": state["current_request"]})
+        request = request_with_history(
+            state["current_request"], state.get("messages"), state.get("user_preferences")
+        )
+        response = await predict_model_agent.ainvoke({"messages": request})
         _logger.Info("Predict model agent invoked")
 
         _logger.Debug(f"Predict model raw response={response['messages'][-1].content}")

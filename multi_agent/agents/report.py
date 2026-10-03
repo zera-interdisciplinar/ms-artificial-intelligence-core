@@ -3,7 +3,7 @@ from typing import Any
 from langgraph.graph.state import CompiledStateGraph
 
 from ..entity import State, AgentName, GraphNodeFunc
-from .message_utils import parse_json_message, with_preferences
+from .message_utils import parse_json_message, request_with_history
 from logger.logger import Logger
 
 # module-level logger instance
@@ -16,7 +16,9 @@ def make_report_func(report_agent: CompiledStateGraph) -> GraphNodeFunc:
     """
 
     async def report_func(state: State) -> dict[str, Any]:
-        request = with_preferences(state["current_request"], state.get("user_preferences"))
+        request = request_with_history(
+            state["current_request"], state.get("messages"), state.get("user_preferences")
+        )
         response = await report_agent.ainvoke({"messages": request})
         _logger.Info("Report agent invoked")
 

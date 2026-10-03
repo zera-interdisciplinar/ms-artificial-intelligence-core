@@ -4,7 +4,7 @@ from typing import Any
 from langgraph.graph.state import CompiledStateGraph
 
 from ..entity import State, AgentName, GraphNodeFunc
-from .message_utils import parse_json_message
+from .message_utils import parse_json_message, render_history
 from langchain.messages import HumanMessage
 from logger.logger import Logger
 
@@ -34,6 +34,9 @@ def make_formatter_func(formatter_agent: CompiledStateGraph) -> GraphNodeFunc:
             source_state["predictions"] = [p.model_dump() for p in predictions]
         if state.get("user_preferences"):
             source_state["user_preferences"] = state["user_preferences"]
+        history = render_history(list(state.get("messages") or [])[:-1])
+        if history:
+            source_state["conversation_history"] = history
         _logger.Debug(f"Formatter input state={source_state}")
 
         response = await formatter_agent.ainvoke(
