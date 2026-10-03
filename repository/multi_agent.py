@@ -1,8 +1,11 @@
-from multi_agent.entity import Message, UserPreferences
+from multi_agent.entity import ConversationPage, ConversationPreview, Message, UserPreferences
 from _internal.mongo.setup import Repository
 from pymongo.collection import Collection
 from repository.exception import RepositoryReadException, RepositorySaveException
 from uuid import UUID
+
+_PREVIEW_LENGTH = 40
+
 
 class MultiAgentRepository():
     """
@@ -45,22 +48,68 @@ class MultiAgentRepository():
             self,
             user_id: UUID,
             thread_id: UUID,
-            limit: int = 50,
+            limit: int | None = 50,
     ) -> list[Message]:
         """
-        Retrieve the most recent messages for a given user and thread, oldest first.
+        Retrieve messages for a given user and thread, oldest first.
+        limit caps how many of the most recent messages come back; None returns all of them.
         Raise RepositoryReadException if the retrieval fails.
         """
         try:
-            messages = (
+            cursor = (
                 self.messageCollection
                 .find({"user_id": str(user_id), "thread_id": str(thread_id)})
                 .sort("created_at", -1)
-                .limit(limit)
             )
-            return [Message.model_validate(message) for message in reversed(list(messages))]
+            if limit is not None:
+                cursor = cursor.limit(limit)
+            return [Message.model_validate(message) for message in reversed(list(cursor))]
         except Exception as e:
             raise RepositoryReadException(f"Failed to retrieve messages: {e}")
+
+    def list_conversations(
+            self,
+            user_id: UUID,
+            page: int = 1,
+            page_size: int = 20,
+    ) -> ConversationPage:
+        """
+        One page of a user's threads, newest activity first.
+        preview is the first 40 characters of the thread's first message.
+        Raise RepositoryReadException if the retrieval fails.
+        """
+        try:
+            pipeline = [
+                {"$match": {"user_id": str(user_id)}},
+                {"$sort": {"created_at": 1}},
+                {"$group": {
+                    "_id": "$thread_id",
+                    "preview": {"$first": "$content"},
+                    "last_message_at": {"$max": "$created_at"},
+                }},
+                {"$sort": {"last_message_at": -1}},
+                {"$facet": {
+                    "items": [{"$skip": (page - 1) * page_size}, {"$limit": page_size}],
+                    "total": [{"$count": "count"}],
+                }},
+            ]
+            result = next(self.messageCollection.aggregate(pipeline), {"items": [], "total": []})
+            total = result["total"][0]["count"] if result["total"] else 0
+            return ConversationPage(
+                items=[
+                    ConversationPreview(
+                        thread_id=doc["_id"],
+                        last_message_at=doc["last_message_at"],
+                        preview=(doc.get("preview") or "")[:_PREVIEW_LENGTH],
+                    )
+                    for doc in result["items"]
+                ],
+                page=page,
+                page_size=page_size,
+                total=total,
+            )
+        except Exception as e:
+            raise RepositoryReadException(f"Failed to list conversations: {e}")
 
     def get_preferences(self, user_id: UUID) -> UserPreferences | None:
         """

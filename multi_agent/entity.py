@@ -60,6 +60,24 @@ class AgentResponse(BaseModel):
     agent_trace: list[str] = []
     report_url: str | None = None
 
+class ConversationPreview(BaseModel):
+    """A thread as it appears in the conversation list: id, when it was last
+    active, and a short cut of the opening message."""
+
+    thread_id: UUID
+    last_message_at: datetime
+    preview: str
+
+
+class ConversationPage(BaseModel):
+    """One page of a user's conversation list."""
+
+    items: list[ConversationPreview]
+    page: int
+    page_size: int
+    total: int
+
+
 class Message(BaseModel):
     """Represents a message exchanged in the multi-agent system."""
 

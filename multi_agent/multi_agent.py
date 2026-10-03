@@ -3,7 +3,7 @@ Define the interface for multi-agent contracts and repository (interface).
 """
 
 from typing import Optional, Protocol, runtime_checkable
-from .entity import Message, AgentResponse, State, UserPreferences
+from .entity import ConversationPage, Message, AgentResponse, State, UserPreferences
 from uuid import UUID
 
 from langgraph.graph import StateGraph
@@ -35,10 +35,23 @@ class IMultiAgentRepository(Protocol):
         self,
         user_id: UUID,
         thread_id: UUID,
-        limit: int = 50,
+        limit: int | None = 50,
     ) -> list[Message]:
         """
-        Retrieve the most recent messages for a given user and thread, oldest first.
+        Retrieve messages for a given user and thread, oldest first.
+        limit caps how many of the most recent messages come back; None returns all of them.
+        Raise RepositoryReadException if the retrieval fails.
+        """
+        ...
+
+    def list_conversations(
+        self,
+        user_id: UUID,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> ConversationPage:
+        """
+        One page of a user's threads, newest activity first.
         Raise RepositoryReadException if the retrieval fails.
         """
         ...

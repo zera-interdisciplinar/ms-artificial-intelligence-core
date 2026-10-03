@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 import pytest
 from pymongo.errors import PyMongoError
 
-from multi_agent.entity import Message, UserPreferences
+from multi_agent.entity import ConversationPage, ConversationPreview, Message, Role, UserPreferences
 from repository.exception import RepositoryException
 from repository.multi_agent import MultiAgentRepository
 
@@ -97,6 +97,19 @@ class TestRetrieveMessages:
 
         assert repo.retrieve_messages(user_id, thread_id) == []
 
+    def test_returns_every_message_when_the_limit_is_omitted(self, repo, message, user_id, thread_id):
+        answer = message.model_copy(update={"content": "três perfis", "role": Role.ASSISTANT})
+        cursor = repo.messageCollection.find.return_value
+        cursor.sort.return_value = iter([
+            answer.model_dump(mode="python") | {"user_id": str(user_id), "thread_id": str(thread_id)},
+            message.model_dump(mode="python") | {"user_id": str(user_id), "thread_id": str(thread_id)},
+        ])
+
+        messages = repo.retrieve_messages(user_id, thread_id, limit=None)
+
+        assert messages == [message, answer]
+        cursor.limit.assert_not_called()
+
     def test_wraps_a_driver_failure(self, repo, user_id, thread_id):
         repo.messageCollection.find.side_effect = PyMongoError("connection refused")
 
@@ -110,6 +123,52 @@ class TestRetrieveMessages:
 
         with pytest.raises(RepositoryException, match="Failed to retrieve messages"):
             repo.retrieve_messages(user_id, thread_id)
+
+
+class TestListConversations:
+    def test_aggregates_by_user_newest_activity_first(self, repo, user_id):
+        repo.messageCollection.aggregate.return_value = iter([{"items": [], "total": []}])
+
+        repo.list_conversations(user_id, page=2, page_size=5)
+
+        pipeline = repo.messageCollection.aggregate.call_args.args[0]
+        assert pipeline[0] == {"$match": {"user_id": str(user_id)}}
+        assert pipeline[-2] == {"$sort": {"last_message_at": -1}}
+        assert pipeline[-1]["$facet"]["items"] == [{"$skip": 5}, {"$limit": 5}]
+
+    def test_returns_a_page_with_the_first_forty_characters(self, repo, user_id, thread_id):
+        last_at = datetime(2026, 7, 16, 13, 0, 0, tzinfo=timezone.utc)
+        repo.messageCollection.aggregate.return_value = iter([{
+            "items": [{"_id": str(thread_id), "preview": "a" * 80, "last_message_at": last_at}],
+            "total": [{"count": 1}],
+        }])
+
+        page = repo.list_conversations(user_id)
+
+        assert page == ConversationPage(
+            items=[ConversationPreview(
+                thread_id=thread_id,
+                last_message_at=last_at,
+                preview="a" * 40,
+            )],
+            page=1,
+            page_size=20,
+            total=1,
+        )
+
+    def test_returns_an_empty_page_when_the_user_has_no_threads(self, repo, user_id):
+        repo.messageCollection.aggregate.return_value = iter([{"items": [], "total": []}])
+
+        page = repo.list_conversations(user_id, page=1, page_size=20)
+
+        assert page.items == []
+        assert page.total == 0
+
+    def test_wraps_a_driver_failure(self, repo, user_id):
+        repo.messageCollection.aggregate.side_effect = PyMongoError("connection refused")
+
+        with pytest.raises(RepositoryException, match="Failed to list conversations"):
+            repo.list_conversations(user_id)
 
 
 class TestPreferences:
