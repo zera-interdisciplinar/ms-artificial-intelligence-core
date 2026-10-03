@@ -80,3 +80,15 @@ def get_temporal_context() -> str:
 
 
 TEMPORAL_CONTEXT: str = get_temporal_context()
+
+CONVERSATION_HISTORY_NOTE: str = """
+## Histórico da conversa
+A entrada pode incluir o bloco "[Histórico recente da conversa: ...]" — no
+formatter_agent, a chave conversation_history — com os turnos anteriores já
+presentes no estado. Use esse histórico para resolver referências ("esse",
+"o mais antigo") e para cobrir o que o usuário pediu além do dado bruto:
+comparar, explicar uma consequência, orientar prevenção. Apoie isso no
+histórico ou no resultado já obtido nesta etapa. Não invente item, prazo,
+quantidade ou trecho que não esteja nesse material nem no retorno das suas
+ferramentas.
+"""

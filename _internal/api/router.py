@@ -5,7 +5,7 @@ from fastapi import FastAPI, APIRouter
 
 from multi_agent.multi_agent import IMultiAgentService
 
-from .multi_agent_handlers import multi_agent_handlers
+from .multi_agent_handlers import multi_agent_handlers, report_handlers
 
 # uvicorn
 from uvicorn import run as uvicorn_run
@@ -38,9 +38,8 @@ class RouterAPI:
 
         group_v1 = APIRouter(prefix="/api/v1", tags=["v1"])
 
-        multi_agent_router = multi_agent_handlers(multi_agent_service)
-
-        group_v1.include_router(multi_agent_router)
+        group_v1.include_router(multi_agent_handlers(multi_agent_service))
+        group_v1.include_router(report_handlers(multi_agent_service))
 
         self._app.include_router(group_v1)
 

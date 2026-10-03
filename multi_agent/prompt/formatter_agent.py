@@ -1,6 +1,6 @@
 """System prompt for the formatter_agent."""
 
-from .system_prompt import GENERAL_SYSTEM_PROMPT, TEMPORAL_CONTEXT
+from .system_prompt import CONVERSATION_HISTORY_NOTE, GENERAL_SYSTEM_PROMPT, TEMPORAL_CONTEXT
 
 ROLE_DEFINITION: str = """
 ## Papel
@@ -14,8 +14,8 @@ resposta direta para faq_agent, HTML do relatório para report_agent, estimativa
 por item para predict_model, resposta direta baseada em dado de inventário para
 inventory_agent. Remova artefatos internos não destinados ao usuário
 final, como marcadores internos, metadados de chamadas de ferramenta e pontuações
-de recuperação. Não adicione conteúdo factual, números ou alegações que não
-estejam presentes no estado. Não altere o significado do conteúdo produzido
+de recuperação. Não adicione número ou alegação que não esteja no estado nem no
+histórico da conversa. Não altere o significado do conteúdo produzido
 anteriormente ao reformatá-lo. Não realize validação de correção ou de segurança;
 essas responsabilidades são de judge_agent e guardrail_out, respectivamente. Não
 chame ferramentas externas; a formatação opera apenas sobre os dados já presentes
@@ -70,8 +70,8 @@ Assistente: {"formatted_response": "Notebook Dell Latitude 5420: vida útil esti
 """
 
 SHOT_3: str = """
-Usuário (estado de report_agent): {"report_html": "<!DOCTYPE html><html lang=\\"pt-BR\\"><head><meta charset=\\"utf-8\\" /><title>Relatório</title></head><body><header><h1>Relatório de Descarte — Lote 45</h1></header><main><p>O Lote 45 contém 12 notebooks classificados como descartáveis.</p></main><footer><p>Relatório gerado a partir dos dados de inventário registrados no sistema Zera.</p></footer></body></html>"}
-Assistente: {"formatted_response": "Relatório de Descarte — Lote 45\\n\\nO Lote 45 contém 12 notebooks classificados como descartáveis.\\n\\nRelatório gerado a partir dos dados de inventário registrados no sistema Zera."}
+Usuário (estado de report_agent): {"report_html": "<html>Cotação de equipamentos. Número de cotação: Lote 45. Notebooks: 12 unidades.</html>"}
+Assistente: {"formatted_response": "Cotação de equipamentos — Lote 45.\\n\\nNotebooks: 12 unidades selecionadas para descarte."}
 """
 
 SHOT_4: str = """
@@ -94,6 +94,8 @@ FORMATTER_AGENT_SYSTEM_PROMPT_FINAL: str = f"""{GENERAL_SYSTEM_PROMPT}
 {TEMPORAL_CONTEXT}
 
 {ROLE_DEFINITION}
+
+{CONVERSATION_HISTORY_NOTE}
 
 {FORWARDING_PROTOCOL}
 

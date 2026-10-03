@@ -1,8 +1,11 @@
 """HTTP-facing DTOs, decoupled from the domain entities in multi_agent/entity.py."""
 
+from datetime import datetime
 from uuid import UUID
 
 from pydantic import BaseModel, Field
+
+from multi_agent.entity import Role
 
 
 class ProcessMessageRequest(BaseModel):
@@ -14,6 +17,19 @@ class ProcessMessageRequest(BaseModel):
     content: str = Field(min_length=1, max_length=8000)
 
 
+class DisposalReportRequest(BaseModel):
+    """Body of POST /reports."""
+
+    user_id: UUID
+    disposal_id: str = Field(min_length=1)
+
+
+class DisposalReportResponse(BaseModel):
+    """URL of a disposal report PDF."""
+
+    report_url: str
+
+
 class ProcessMessageResponse(BaseModel):
     """Response of POST /multi-agent/process-message."""
 
@@ -22,3 +38,28 @@ class ProcessMessageResponse(BaseModel):
     blocked_reason: str | None = None
     agent_trace: list[str] = []
     report_url: str | None = None
+
+
+class ConversationPreviewResponse(BaseModel):
+    """One row of GET /multi-agent/conversations."""
+
+    thread_id: UUID
+    last_message_at: datetime
+    preview: str
+
+
+class ConversationListResponse(BaseModel):
+    """A page of GET /multi-agent/conversations."""
+
+    items: list[ConversationPreviewResponse]
+    page: int
+    page_size: int
+    total: int
+
+
+class ConversationMessageResponse(BaseModel):
+    """One message of GET /multi-agent/conversations/{thread_id}."""
+
+    role: Role
+    content: str
+    created_at: datetime

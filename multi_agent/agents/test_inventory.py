@@ -5,6 +5,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from langchain.messages import HumanMessage
+
 from multi_agent.entity import AgentName, State
 from multi_agent.agents.inventory import make_inventory_func, inventory_fate_decision
 from multi_agent.unit_scope import current_unit_id, set_unit_id
@@ -33,6 +35,25 @@ class TestInventoryFunc:
             "inventory_answer": "O notebook NB-4521 está classificado como 'em uso', localizado no setor de TI.",
             "next_agent": AgentName.FORMATTER_AGENT,
         }
+
+    def test_sends_prior_turns_along_with_the_current_request(self):
+        inventory_agent = MagicMock()
+        inventory_agent.ainvoke = AsyncMock(return_value={
+            "messages": [MagicMock(content=json.dumps({"answer": "ok"}))]
+        })
+        inventory_func = make_inventory_func(inventory_agent)
+
+        asyncio.run(inventory_func(cast(State, {
+            "current_request": "faça a previsão do mais antigo",
+            "messages": [
+                HumanMessage(content="pega o item mais antigo no meu estoque"),
+                HumanMessage(content="faça a previsão do mais antigo"),
+            ],
+        })))
+
+        sent = inventory_agent.ainvoke.call_args[0][0]["messages"]
+        assert "pega o item mais antigo no meu estoque" in sent
+        assert "faça a previsão do mais antigo" in sent
 
     def test_parses_answer_when_no_item_is_found(self):
         inventory_agent = MagicMock()

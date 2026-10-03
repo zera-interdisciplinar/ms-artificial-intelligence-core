@@ -15,7 +15,9 @@ class TestReportFunc:
                 MagicMock(
                     content=json.dumps(
                         {
-                            "report_html": "<html><body><header>Relatório — Lote 45</header><main>12 notebooks descartáveis.</main><footer>Gerado pelo sistema Zera.</footer></body></html>",
+                            "quote_number": "Lote 45",
+                            "categories": [{"name": "Notebooks", "quantity": "12", "unit": "unidades"}],
+                            "items": [],
                         }
                     )
                 )
@@ -25,8 +27,8 @@ class TestReportFunc:
 
         result = asyncio.run(report_func(cast(State, {"current_request": "gere o relatório do lote 45"})))
 
-        assert result == {
-            "called_agents": [AgentName.REPORT_AGENT],
-            "report_html": "<html><body><header>Relatório — Lote 45</header><main>12 notebooks descartáveis.</main><footer>Gerado pelo sistema Zera.</footer></body></html>",
-        }
+        assert result["called_agents"] == [AgentName.REPORT_AGENT]
+        assert "Cotação de equipamentos" in result["report_html"]
+        assert "Lote 45" in result["report_html"]
+        assert "Notebooks: 12 unidades" in result["report_html"]
         report_agent.ainvoke.assert_called_once_with({"messages": "gere o relatório do lote 45"})

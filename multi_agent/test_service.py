@@ -10,8 +10,6 @@ from .exception import MultiAgentServiceNotSetupException, UnitMismatchException
 from .entity import AgentName, AgentResponse, Message, Role
 from .service import MultiAgentService
 from .thread_cache import ThreadCacheEntry
-from _internal.storage.exceptions import PDFRenderException, StorageUploadException
-
 USER_ID = UUID("11111111-1111-1111-1111-111111111111")
 THREAD_ID = UUID("22222222-2222-2222-2222-222222222222")
 UNIT_ID = UUID("33333333-3333-3333-3333-333333333333")
@@ -182,7 +180,7 @@ class TestProcessMessage:
         hydration_args, hydration_kwargs = compiled.update_state.call_args_list[0]
         assert hydration_args[1]["messages"][0].content == "oi"
 
-    def test_renders_and_uploads_the_report_when_report_agent_was_called(self, service):
+    def test_does_not_upload_a_report_generated_in_chat(self, service):
         _stub_graph(service, {
             "final_response": "aqui está o relatório",
             "blocked": False,
@@ -190,17 +188,12 @@ class TestProcessMessage:
             "called_agents": [AgentName.GUARDRAIL_IN, AgentName.REPORT_AGENT],
             "report_html": "<html><body>relatório</body></html>",
         })
-        service.pdf_renderer.render.return_value = b"%PDF-1.7"
-        service.storage_service.upload.return_value = "https://xxxxx.supabase.co/storage/v1/object/public/zera-reports/report.pdf"
 
         response = asyncio.run(service.process_message("gere o relatório", USER_ID, THREAD_ID, UNIT_ID, "Bearer test-token"))
 
-        service.pdf_renderer.render.assert_called_once_with("<html><body>relatório</body></html>")
-        _, upload_kwargs = service.storage_service.upload.call_args
-        assert upload_kwargs["content"] == b"%PDF-1.7"
-        assert upload_kwargs["filename"].endswith(".pdf")
-        assert upload_kwargs["content_type"] == "application/pdf"
-        assert response.report_url == "https://xxxxx.supabase.co/storage/v1/object/public/zera-reports/report.pdf"
+        service.pdf_renderer.render.assert_not_called()
+        service.storage_service.upload.assert_not_called()
+        assert response.report_url is None
 
     def test_does_not_render_or_upload_when_report_agent_was_not_called(self, service):
         _stub_graph(service, {
@@ -215,38 +208,6 @@ class TestProcessMessage:
 
         service.pdf_renderer.render.assert_not_called()
         service.storage_service.upload.assert_not_called()
-        assert response.report_url is None
-
-    def test_keeps_the_chat_response_when_pdf_rendering_fails(self, service):
-        _stub_graph(service, {
-            "final_response": "aqui está o relatório",
-            "blocked": False,
-            "blocked_reason": None,
-            "called_agents": [AgentName.GUARDRAIL_IN, AgentName.REPORT_AGENT],
-            "report_html": "<html><body>relatório</body></html>",
-        })
-        service.pdf_renderer.render.side_effect = PDFRenderException("invalid markup")
-
-        response = asyncio.run(service.process_message("gere o relatório", USER_ID, THREAD_ID, UNIT_ID, "Bearer test-token"))
-
-        service.storage_service.upload.assert_not_called()
-        assert response.content == "aqui está o relatório"
-        assert response.report_url is None
-
-    def test_keeps_the_chat_response_when_upload_fails(self, service):
-        _stub_graph(service, {
-            "final_response": "aqui está o relatório",
-            "blocked": False,
-            "blocked_reason": None,
-            "called_agents": [AgentName.GUARDRAIL_IN, AgentName.REPORT_AGENT],
-            "report_html": "<html><body>relatório</body></html>",
-        })
-        service.pdf_renderer.render.return_value = b"%PDF-1.7"
-        service.storage_service.upload.side_effect = StorageUploadException("404 Not Found")
-
-        response = asyncio.run(service.process_message("gere o relatório", USER_ID, THREAD_ID, UNIT_ID, "Bearer test-token"))
-
-        assert response.content == "aqui está o relatório"
         assert response.report_url is None
 
     def test_fires_and_forgets_preferences_update_when_a_thread_cache_entry_expires(self, service):
@@ -267,6 +228,50 @@ class TestProcessMessage:
         asyncio.run(asyncio.sleep(0))  # let the fire-and-forget task run
 
         service._update_preferences.assert_called_once_with(expired)
+
+
+class TestDisposalReport:
+    def test_generates_uploads_and_stores_a_new_disposal_report(self, service):
+        service.repository.get_disposal_report.return_value = None
+        service.report_node = AsyncMock(return_value={"report_html": "<html>descarte</html>"})
+        service.pdf_renderer.render.return_value = b"%PDF-1.7"
+        service.storage_service.upload.return_value = "https://storage/disposal-42.pdf"
+
+        url = asyncio.run(service.create_disposal_report(USER_ID, "42"))
+
+        service.report_node.assert_awaited_once()
+        assert "42" in service.report_node.await_args.args[0]["current_request"]
+        service.pdf_renderer.render.assert_called_once_with("<html>descarte</html>")
+        _, upload_kwargs = service.storage_service.upload.call_args
+        assert upload_kwargs["filename"] == "disposal-42.pdf"
+        assert upload_kwargs["content"] == b"%PDF-1.7"
+        saved = service.repository.save_disposal_report.call_args.args[0]
+        assert saved.disposal_id == "42"
+        assert saved.user_id == USER_ID
+        assert saved.report_url == "https://storage/disposal-42.pdf"
+        assert url == "https://storage/disposal-42.pdf"
+
+    def test_returns_the_stored_url_without_generating_again(self, service):
+        existing = MagicMock(report_url="https://storage/already.pdf")
+        service.repository.get_disposal_report.return_value = existing
+        service.report_node = AsyncMock()
+
+        url = asyncio.run(service.create_disposal_report(USER_ID, "42"))
+
+        assert url == "https://storage/already.pdf"
+        service.report_node.assert_not_awaited()
+        service.storage_service.upload.assert_not_called()
+        service.repository.save_disposal_report.assert_not_called()
+
+    def test_reads_the_stored_url(self, service):
+        service.repository.get_disposal_report.return_value = MagicMock(report_url="https://storage/already.pdf")
+
+        assert service.get_disposal_report("42") == "https://storage/already.pdf"
+
+    def test_reads_none_when_the_disposal_has_no_report(self, service):
+        service.repository.get_disposal_report.return_value = None
+
+        assert service.get_disposal_report("42") is None
 
 
 class TestSetup:

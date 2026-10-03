@@ -79,6 +79,25 @@ class TestOrchestratorFunc:
         assert "Histórico recente da conversa" in request_sent
         assert "lote 12" in request_sent
 
+    def test_sends_the_whole_message_history_not_only_the_last_six(self):
+        agent = self._make_agent(
+            '{"intent": "unclassified", "next_agent": "%s", "suggestion": "ok"}'
+            % AgentName.END.value
+        )
+        orchestrator_func = make_orchestrator_func(agent)
+
+        older = [HumanMessage(content=f"turno {i}") for i in range(8)]
+        state = cast(State, {
+            "current_request": "e agora?",
+            "messages": older + [HumanMessage(content="e agora?")],
+        })
+        asyncio.run(orchestrator_func(state))
+
+        request_sent = agent.ainvoke.call_args[0][0]["messages"]
+        history = request_sent.split("[Histórico recente da conversa:\n", 1)[1]
+        assert "turno 0" in history
+        assert "turno 7" in history
+
     def test_does_not_set_final_response_for_regular_routing(self):
         agent = self._make_agent(
             '{"intent": "faq", "next_agent": "%s"}' % AgentName.FAQ_AGENT.value

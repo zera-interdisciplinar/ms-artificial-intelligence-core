@@ -9,12 +9,16 @@ Tests usecases:
 - /multi-agent/process-message: Test the FAQ agent's ability to retrieve context from a PDF
 - /multi-agent/process-message: Test the predict agent's ability to generate predictions based on input
 - /multi-agent/process-message: Test the report agent's ability to generate reports based on input
+- /reports: Test that a disposal report is stored and its URL can be read back
 - /multi-agent/process-message: Test the inventory agent's ability to answer a factual inventory query
 - /multi-agent/process-message: Tests the ablity of a off-topic user message to be handled (blocked by guardrail_in)
 - /multi-agent/process-message: A unit_id that is not the user's is refused with 403, never answered from another unit's data
+- /multi-agent/conversations: lists a user's threads, newest first, paged, with a 40-character preview
+- /multi-agent/conversations/{thread_id}: returns every message exchanged in that thread
 """
 
 import os
+from datetime import datetime, timezone
 from uuid import uuid4
 
 import httpx
@@ -24,8 +28,8 @@ from dotenv import load_dotenv
 load_dotenv()
 from fastapi.testclient import TestClient
 from httpx import Response
-from multi_agent.entity import AgentResponse
-from _internal.api.dto import ProcessMessageRequest
+from multi_agent.entity import AgentResponse, Message, Role
+from _internal.api.dto import DisposalReportRequest, ProcessMessageRequest
 
 pytestmark = pytest.mark.integration
 
@@ -238,13 +242,32 @@ def test_report_agent(client: TestClient, auth_headers: dict) -> None:
     # assert that the response has successfully processed the message and that the report agent was called
     assert called_report_flow(response)
     assert response.content is not None
-    assert response.report_url is not None
+    assert response.report_url is None
 
     # assert that the response did not called any other agents or that the response is not blocked
     assert not called_faq_flow(response)
     assert not called_predict_flow(response)
     assert not called_inventory_flow(response)
     assert not response.blocked
+
+
+def test_disposal_report_returns_a_stored_url(client: TestClient) -> None:
+    """
+    A disposal report is generated outside the chat, stored, and readable by disposal id.
+    """
+    disposal_id = _new_UUID()
+    body = DisposalReportRequest(user_id=INTEGRATION_USER_ID, disposal_id=disposal_id)
+
+    created: Response = client.post("/api/v1/reports", json=body.model_dump(mode="json"))
+
+    assert created.status_code == 200
+    report_url = created.json()["report_url"]
+    assert report_url.startswith("http")
+
+    fetched: Response = client.get(f"/api/v1/reports/{disposal_id}")
+
+    assert fetched.status_code == 200
+    assert fetched.json()["report_url"] == report_url
 
 def test_inventory_agent(client: TestClient, auth_headers: dict) -> None:
     """
@@ -331,3 +354,67 @@ def test_rejects_a_unit_that_does_not_belong_to_the_user(client: TestClient, aut
     )
 
     assert http_response.status_code == 403
+
+
+def test_lists_conversations_and_reads_every_message(client: TestClient) -> None:
+    """
+    Threads saved in Mongo come back newest-first, one page at a time, with a
+    40-character cut of the first message. The thread endpoint returns both sides.
+    """
+    from config.environments import Environments
+    from _internal.mongo.setup import Repository
+    from repository.multi_agent import MultiAgentRepository
+
+    envs = Environments()
+    envs.MONGO_DB_NAME = "ms-artificial-intelligence-core-tests"
+    envs.MONGO_URI = "mongodb://localhost:27017"
+    repository = MultiAgentRepository()
+    repository.setup(Repository(envs))
+
+    user_id = uuid4()
+    older_thread = uuid4()
+    newer_thread = uuid4()
+    opening = "primeira mensagem desta conversa antiga que passa de quarenta caracteres"
+    repository.save_message(Message(
+        user_id=user_id, thread_id=older_thread, role=Role.USER, content=opening,
+        created_at=datetime(2026, 7, 1, 10, 0, tzinfo=timezone.utc),
+    ))
+    repository.save_message(Message(
+        user_id=user_id, thread_id=older_thread, role=Role.ASSISTANT, content="resposta do assistente",
+        created_at=datetime(2026, 7, 1, 10, 1, tzinfo=timezone.utc),
+    ))
+    repository.save_message(Message(
+        user_id=user_id, thread_id=newer_thread, role=Role.USER, content="conversa mais recente",
+        created_at=datetime(2026, 7, 2, 10, 0, tzinfo=timezone.utc),
+    ))
+
+    first_page = client.get(
+        "/api/v1/multi-agent/conversations",
+        params={"user_id": str(user_id), "page": 1, "page_size": 1},
+    )
+    assert first_page.status_code == 200
+    body = first_page.json()
+    assert body["total"] == 2
+    assert body["page"] == 1
+    assert body["items"][0]["thread_id"] == str(newer_thread)
+    assert body["items"][0]["preview"] == "conversa mais recente"
+
+    second_page = client.get(
+        "/api/v1/multi-agent/conversations",
+        params={"user_id": str(user_id), "page": 2, "page_size": 1},
+    )
+    assert second_page.status_code == 200
+    older = second_page.json()["items"][0]
+    assert older["thread_id"] == str(older_thread)
+    assert older["preview"] == opening[:40]
+    assert len(older["preview"]) == 40
+
+    history = client.get(
+        f"/api/v1/multi-agent/conversations/{older_thread}",
+        params={"user_id": str(user_id)},
+    )
+    assert history.status_code == 200
+    assert [(item["role"], item["content"]) for item in history.json()] == [
+        ("user", opening),
+        ("assistant", "resposta do assistente"),
+    ]

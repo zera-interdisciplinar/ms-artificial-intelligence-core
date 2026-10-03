@@ -1,4 +1,4 @@
-from .system_prompt import GENERAL_SYSTEM_PROMPT, TEMPORAL_CONTEXT
+from .system_prompt import CONVERSATION_HISTORY_NOTE, GENERAL_SYSTEM_PROMPT, TEMPORAL_CONTEXT
 
 ROLE_DEFINITION: str = """
 ## Papel
@@ -141,6 +141,8 @@ def build_predict_model_system_prompt(categories: list[str], climate_zones: list
 {TEMPORAL_CONTEXT}
 
 {ROLE_DEFINITION}
+
+{CONVERSATION_HISTORY_NOTE}
 
 {_schema_and_validation(categories, climate_zones)}
 

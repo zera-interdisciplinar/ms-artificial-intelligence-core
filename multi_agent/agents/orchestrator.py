@@ -3,16 +3,11 @@ from typing import Any
 from langgraph.graph.state import CompiledStateGraph
 
 from ..entity import State, AgentName, GraphNodeFunc
-from .message_utils import parse_json_message, render_history, with_preferences
+from .message_utils import parse_json_message, request_with_history
 from logger.logger import Logger
 
 # module-level logger instance
 _logger = Logger()
-
-# how many recent Human/AI turns to give the orchestrator so it can resolve
-# conversational references ("esse aí", "quanto custaria isso") into a
-# self-contained request for the downstream (history-less) specialist agents.
-HISTORY_MESSAGES_LIMIT = 6
 
 def make_orchestrator_func(orchestrator_agent: CompiledStateGraph) -> GraphNodeFunc:
     """
@@ -22,11 +17,10 @@ def make_orchestrator_func(orchestrator_agent: CompiledStateGraph) -> GraphNodeF
     async def orchestrator_func(state: State) -> dict[str, Any]:
         # state["messages"][-1] is this turn's own (already anonymized) request,
         # added by guardrail_in; history is everything before it.
-        history = render_history(state["messages"][:-1], limit=HISTORY_MESSAGES_LIMIT)
         current_request = state["current_request"]
-        request = with_preferences(current_request, state.get("user_preferences"))
-        if history:
-            request = f"[Histórico recente da conversa:\n{history}]\n\n{request}"
+        request = request_with_history(
+            current_request, state["messages"], state.get("user_preferences")
+        )
 
         response = await orchestrator_agent.ainvoke({"messages": request})
         _logger.Info("Orchestrator agent invoked")
