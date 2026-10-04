@@ -1,0 +1,9 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+  "mcpServers": {
+    "zera": {
+      "type": "streamable-http",
+      "url": "https://34.95.129.59/qa/ai-core/mcp"
+    }
+  }
+}

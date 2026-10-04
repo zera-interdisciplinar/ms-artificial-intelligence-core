@@ -1,0 +1,9 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "zera",
+  "version": "0.1.0",
+  "description": "Zera specialist assistant via remote MCP (login + ask_zera). FAQ, inventory, time-to-failure, disposal report text. Not a general chatbot. MCP config: ./mcp.json",
+  "keywords": ["zera", "inventory", "faq", "predictive-maintenance", "mcp"],
+  "mcp": "./mcp.json",
+  "skills": "./skills/"
+}

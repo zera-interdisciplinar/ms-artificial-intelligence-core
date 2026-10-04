@@ -2,14 +2,14 @@ from logger.logger import Logger
 from config.environments import Environments
 
 from fastapi import FastAPI, APIRouter
+import contextlib
 
 from multi_agent.multi_agent import IMultiAgentService
 
 from .multi_agent_handlers import multi_agent_handlers, report_handlers
+from _internal.mcp.server import build_mcp
 
-# uvicorn
 from uvicorn import run as uvicorn_run
-
 
 
 class RouterAPI:
@@ -30,7 +30,25 @@ class RouterAPI:
         """
         BuildAPI is a method that sets up the API endpoints and their corresponding logic. It initializes the necessary components and prepares the API for handling requests.
         """
-        self._app = FastAPI()
+        admin_core = getattr(multi_agent_service, "admin_core", None)
+        mcp = None
+        if admin_core is not None:
+            mcp = build_mcp(
+                multi_agent_service,
+                admin_core,
+                self.envs.SESSION_TTL_SECONDS,
+            )
+            mcp_asgi = mcp.streamable_http_app()
+
+            @contextlib.asynccontextmanager
+            async def lifespan(app: FastAPI):
+                async with mcp.session_manager.run():
+                    yield
+
+            self._app = FastAPI(lifespan=lifespan)
+            self._app.mount("/mcp", mcp_asgi)
+        else:
+            self._app = FastAPI()
 
         @self._app.get("/health", tags=["health"])
         async def health_check() -> dict[str, str]:

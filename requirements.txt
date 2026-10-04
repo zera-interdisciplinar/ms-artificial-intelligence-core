@@ -9,6 +9,7 @@ langchain_google_genai
 langchain_community
 langchain_groq
 langchain-mcp-adapters
+mcp
 
 # Database
 pymongo

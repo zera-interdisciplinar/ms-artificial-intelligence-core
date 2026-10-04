@@ -9,7 +9,10 @@ responsibility: the JWT that authorizes the call is the one the original
 caller sent us (Authorization header), and we just forward it.
 """
 
+import base64
+import json
 import time
+from dataclasses import dataclass
 from uuid import UUID
 
 import httpx
@@ -21,6 +24,12 @@ _CACHE_TTL_SECONDS = 360
 _TIMEOUT_SECONDS = 5.0
 
 
+@dataclass(frozen=True)
+class AdminCoreLogin:
+    access_token: str
+    user_id: UUID
+
+
 class AdminCoreClient:
     """Resolves a user's unitId against ms-administrative-core"""
 
@@ -28,6 +37,43 @@ class AdminCoreClient:
         self.envs = envs
         self.logger = logger
         self._cache: dict[UUID, tuple[UUID, float]] = {}
+
+    async def login(self, email: str, password: str) -> AdminCoreLogin | None:
+        """POST /api/v1/auth/login on ms-administrative-core. None on failure.
+
+        This service does not store passwords or issue JWTs. The token is whatever
+        admin-core returned as accessToken.
+        """
+        assert self.envs.ADMIN_CORE_URL is not None, "ADMIN_CORE_URL must be set to log in"
+
+        url = f"{self.envs.ADMIN_CORE_URL}/api/v1/auth/login"
+        try:
+            async with httpx.AsyncClient(timeout=_TIMEOUT_SECONDS) as client:
+                response = await client.post(
+                    url,
+                    json={"email": email, "password": password},
+                    headers={"apikey": self.envs.ADMIN_CORE_API_KEY or ""},
+                )
+        except httpx.HTTPError as e:
+            self.logger.Error("Failed to reach ms-administrative-core login", e)
+            return None
+
+        if response.status_code != 200:
+            self.logger.Warning(f"ms-administrative-core login answered {response.status_code}")
+            return None
+
+        body = response.json()
+        access_token = body.get("accessToken")
+        if not access_token:
+            self.logger.Warning("ms-administrative-core login had no accessToken")
+            return None
+
+        user_id = _user_id_from_login(body, access_token)
+        if user_id is None:
+            self.logger.Warning("ms-administrative-core login had no user id")
+            return None
+
+        return AdminCoreLogin(access_token=str(access_token), user_id=user_id)
 
     async def get_unit_id(self, user_id: UUID, authorization: str) -> UUID | None:
         """Returns the unit the user belongs to, or None when it cannot be resolved.
@@ -74,3 +120,39 @@ class AdminCoreClient:
         unit_id = UUID(str(raw_unit_id))
         self._cache[user_id] = (unit_id, time.monotonic())
         return unit_id
+
+
+def _user_id_from_login(body: dict, access_token: str) -> UUID | None:
+    for key in ("userId", "user_id", "id"):
+        raw = body.get(key)
+        if raw:
+            try:
+                return UUID(str(raw))
+            except ValueError:
+                continue
+    return _user_id_from_unverified_jwt(access_token)
+
+
+def _user_id_from_unverified_jwt(access_token: str) -> UUID | None:
+    # ponytail: JWT is issued by admin-core; we only need the user id claim for
+    # session binding. Signature is not checked here — get_unit_id still
+    # forwards the Bearer and admin-core is the authority. Upgrade: login body
+    # always includes userId.
+    parts = access_token.split(".")
+    if len(parts) < 2:
+        return None
+    payload = parts[1]
+    pad = "=" * (-len(payload) % 4)
+    try:
+        claims = json.loads(base64.urlsafe_b64decode(payload + pad))
+    except (ValueError, json.JSONDecodeError):
+        return None
+    for key in ("userId", "user_id", "sub", "id"):
+        raw = claims.get(key)
+        if not raw:
+            continue
+        try:
+            return UUID(str(raw))
+        except ValueError:
+            continue
+    return None

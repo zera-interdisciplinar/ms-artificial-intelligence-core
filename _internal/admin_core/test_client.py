@@ -30,6 +30,7 @@ def _http_client(response: Any) -> MagicMock:
     async_client.__aenter__ = AsyncMock(return_value=async_client)
     async_client.__aexit__ = AsyncMock(return_value=False)
     async_client.get = AsyncMock(return_value=response)
+    async_client.post = AsyncMock(return_value=response)
     return async_client
 
 
@@ -79,3 +80,26 @@ class TestGetUnitId:
 
         with patch("httpx.AsyncClient", return_value=http):
             assert asyncio.run(client.get_unit_id(USER_ID, "Bearer test-token")) is None
+
+
+class TestLogin:
+    def test_returns_token_and_user_id_from_the_body(self, client):
+        http = _http_client(_response(200, {"accessToken": "tok", "userId": str(USER_ID)}))
+
+        with patch("httpx.AsyncClient", return_value=http):
+            result = asyncio.run(client.login("a@b.c", "pw"))
+
+        assert result is not None
+        assert result.access_token == "tok"
+        assert result.user_id == USER_ID
+        http.post.assert_awaited_once_with(
+            "https://gateway.zera.internal/administrative/api/v1/auth/login",
+            json={"email": "a@b.c", "password": "pw"},
+            headers={"apikey": "fake-key"},
+        )
+
+    def test_returns_none_when_credentials_fail(self, client):
+        http = _http_client(_response(401))
+
+        with patch("httpx.AsyncClient", return_value=http):
+            assert asyncio.run(client.login("a@b.c", "pw")) is None

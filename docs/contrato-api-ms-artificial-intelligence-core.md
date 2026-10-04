@@ -20,6 +20,7 @@ Token ausente em `process-message`: **`422`** (FastAPI: header `Authorization` �
 | JWT encaminhado + `unit_id` conferido no admin-core | `POST /api/v1/multi-agent/process-message` |
 | Sem JWT neste serviço (só identifica por query/`user_id` no body) | `GET /api/v1/multi-agent/conversations`, `GET /api/v1/multi-agent/conversations/{thread_id}`, `POST /api/v1/reports`, `GET /api/v1/reports/{disposal_id}` |
 | Público | `GET /health` |
+| Sessão MCP (`login` tool → JWT só no servidor) | `POST /mcp` (Streamable HTTP) |
 
 Ator autenticado com `unit_id` que não pertence ao `user_id`: `403`.
 
@@ -304,6 +305,15 @@ Fluxo típico na UI: após concluir um descarte, `POST /reports` e abrir `report
 - **`blocked`**: boolean. Recusa de conteúdo/intenção **não** vira status HTTP 4xx.
 
 Não há enum de intenção na API HTTP: a intenção fica só no estado interno do grafo.
+
+## MCP (hosts externos)
+
+`POST /mcp` — Streamable HTTP no mesmo processo. Tools:
+
+- `login(email, password)` — proxy de `POST {ADMIN_CORE_URL}/api/v1/auth/login`. Devolve `{ ok, user_id, unit_id, session_handle }` ou `{ ok: false }`. Nunca devolve `accessToken`.
+- `ask_zera(content, thread_id, session_handle)` — chama `process_message` com Bearer/`user_id`/`unit_id` da sessão.
+
+Não há tool de `POST /api/v1/reports`. Pacote ChatGPT em `plugin/`.
 
 ## Qual rota escolher
 
