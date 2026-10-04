@@ -92,3 +92,56 @@ def build_mcp(
         return await ask_zera_impl(service, store, session_handle, content, thread_id)
 
     return mcp
+
+
+def wrap_chatgpt_mcp(app):
+    """ChatGPT's connector GETs /mcp without Accept: text/event-stream (406).
+
+    Probe GETs get 200 JSON. Other methods get Accept patched so Streamable HTTP
+    does not 406 when the host omits the header.
+    """
+
+    async def inner(scope, receive, send):
+        if scope["type"] != "http":
+            await app(scope, receive, send)
+            return
+        method = scope.get("method", b"")
+        if isinstance(method, bytes):
+            method = method.decode()
+        headers = list(scope.get("headers") or [])
+        accept = b""
+        for key, value in headers:
+            if key == b"accept":
+                accept = value.lower()
+                break
+        if method == "GET" and b"text/event-stream" not in accept:
+            await send(
+                {
+                    "type": "http.response.start",
+                    "status": 200,
+                    "headers": [(b"content-type", b"application/json")],
+                }
+            )
+            await send({"type": "http.response.body", "body": b'{"ok":true}'})
+            return
+        needed = []
+        if b"application/json" not in accept:
+            needed.append(b"application/json")
+        if b"text/event-stream" not in accept:
+            needed.append(b"text/event-stream")
+        if needed:
+            patched = accept + (b", " if accept else b"") + b", ".join(needed)
+            new_headers = []
+            found = False
+            for key, value in headers:
+                if key == b"accept":
+                    new_headers.append((key, patched))
+                    found = True
+                else:
+                    new_headers.append((key, value))
+            if not found:
+                new_headers.append((b"accept", patched))
+            scope = {**scope, "headers": new_headers}
+        await app(scope, receive, send)
+
+    return inner

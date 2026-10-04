@@ -18,4 +18,8 @@ def test_mcp_path_is_not_404():
                 "/mcp/",
             json={"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}},
         )
-    assert response.status_code != 404
+        assert response.status_code != 404
+        probe = client.get("/mcp/")
+        assert probe.status_code == 200
+        assert probe.json() == {"ok": True}
+        assert "text/event-stream" not in probe.text

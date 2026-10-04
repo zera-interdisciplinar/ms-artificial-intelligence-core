@@ -7,7 +7,7 @@ import contextlib
 from multi_agent.multi_agent import IMultiAgentService
 
 from .multi_agent_handlers import multi_agent_handlers, report_handlers
-from _internal.mcp.server import build_mcp
+from _internal.mcp.server import build_mcp, wrap_chatgpt_mcp
 
 from uvicorn import run as uvicorn_run
 
@@ -38,7 +38,7 @@ class RouterAPI:
                 admin_core,
                 self.envs.SESSION_TTL_SECONDS,
             )
-            mcp_asgi = mcp.streamable_http_app()
+            mcp_asgi = wrap_chatgpt_mcp(mcp.streamable_http_app())
 
             @contextlib.asynccontextmanager
             async def lifespan(app: FastAPI):
