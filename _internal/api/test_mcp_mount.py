@@ -15,7 +15,7 @@ def test_mcp_path_is_not_404():
     router.BuildAPI(service)
     with TestClient(router._app) as client:
         response = client.post(
-            "/mcp",
+                "/mcp/",
             json={"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}},
         )
     assert response.status_code != 404

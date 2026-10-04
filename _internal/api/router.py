@@ -45,7 +45,7 @@ class RouterAPI:
                 async with mcp.session_manager.run():
                     yield
 
-            self._app = FastAPI(lifespan=lifespan)
+            self._app = FastAPI(lifespan=lifespan, redirect_slashes=False)
             self._app.mount("/mcp", mcp_asgi)
         else:
             self._app = FastAPI()

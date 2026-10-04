@@ -3,6 +3,7 @@
 from uuid import UUID, uuid4
 
 from mcp.server.fastmcp import FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
 
 from _internal.admin_core.client import AdminCoreClient
 from _internal.mcp.session import McpSessionStore
@@ -75,6 +76,10 @@ def build_mcp(
         streamable_http_path="/",
         stateless_http=True,
         json_response=True,
+        # ponytail: FastMCP defaults host=127.0.0.1 and then only allows localhost
+        # Host headers. Behind Kong the Host is the LB IP/DNS. Kong is the edge;
+        # when we have a real hostname, set allowed_hosts instead of disabling.
+        transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False),
     )
     store = McpSessionStore(ttl_seconds)
 
