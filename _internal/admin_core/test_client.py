@@ -73,6 +73,27 @@ class TestGetUnitId:
         with patch("httpx.AsyncClient", return_value=http):
             assert asyncio.run(client.get_unit_id(USER_ID, "Bearer test-token")) is None
 
+    def test_login_posts_email_and_password_and_returns_the_token_body(self, client):
+        http = _http_client(_response(200, {"accessToken": "jwt", "refreshToken": "r"}))
+        http.post = AsyncMock(return_value=_response(200, {"accessToken": "jwt", "refreshToken": "r"}))
+
+        with patch("httpx.AsyncClient", return_value=http):
+            body = asyncio.run(client.login("a@zera.dev", "secret"))
+
+        assert body["accessToken"] == "jwt"
+        http.post.assert_awaited_once_with(
+            "https://gateway.zera.internal/administrative/api/v1/auth/login",
+            json={"email": "a@zera.dev", "password": "secret"},
+            headers={"apikey": "fake-key"},
+        )
+
+    def test_login_returns_none_when_credentials_are_rejected(self, client):
+        http = _http_client(_response(401))
+        http.post = AsyncMock(return_value=_response(401))
+
+        with patch("httpx.AsyncClient", return_value=http):
+            assert asyncio.run(client.login("a@zera.dev", "nope")) is None
+
     def test_returns_none_when_the_admin_core_is_unreachable(self, client):
         http = _http_client(_response(200))
         http.get = AsyncMock(side_effect=httpx.ConnectError("boom"))
