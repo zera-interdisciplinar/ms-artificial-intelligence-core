@@ -1,0 +1,23 @@
+---
+description: ms-artificial-intelligence-core — stack, comandos make, convenções LangGraph multi-agente
+alwaysApply: true
+---
+
+# ms-artificial-intelligence-core
+
+API FastAPI + LangGraph (guardrail in/out, orchestrator, faq, report, predict_model, formatter, judge). MongoDB, FAISS (FAQ), Supabase + WeasyPrint (PDF).
+
+## Comandos
+
+- `make install` / `make test` / `make test-integration` / `make test-cov` / `make run` / `make dev`
+- Docker: `make up`, `make down`, `make restart`
+
+## Convenções
+
+- Agentes crus devolvem `{"messages": [...]}`; wrappers fazem parse do JSON da última mensagem.
+- Payloads para sub-agentes: `HumanMessage`, não segunda `SystemMessage`.
+- Integrações cross-repo (ms-inventory, ms-adm-core, predict_model): **MCP**, não SDK direto.
+- Agentes de execução única por turno usam `state["current_request"]`; só `guardrail_in` lê `state["messages"][-1]`.
+- Testes `test_*.py` ao lado do código testado.
+
+Spec: `docs/this-project-overview.md`. Integração predict: `docs/integration-predict-time-to-failure.md`.

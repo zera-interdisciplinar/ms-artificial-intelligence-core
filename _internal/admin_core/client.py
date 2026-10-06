@@ -74,3 +74,38 @@ class AdminCoreClient:
         unit_id = UUID(str(raw_unit_id))
         self._cache[user_id] = (unit_id, time.monotonic())
         return unit_id
+
+    async def login(self, email: str, password: str) -> dict | None:
+        """POST /api/v1/auth/login. None when the credentials are rejected.
+
+        The password is not logged. The body is the admin-core TokenResponse:
+        userId, accessToken, refreshToken, tokenType, expiresIn.
+        """
+
+        return await self._auth_post("/api/v1/auth/login", {"email": email, "password": password})
+
+    async def refresh(self, refresh_token: str) -> dict | None:
+        """POST /api/v1/auth/refresh. None when the refresh token is rejected."""
+
+        return await self._auth_post("/api/v1/auth/refresh", {"refreshToken": refresh_token})
+
+    async def _auth_post(self, path: str, body: dict) -> dict | None:
+        assert self.envs.ADMIN_CORE_URL is not None, "ADMIN_CORE_URL must be set to reach ms-administrative-core"
+
+        url = f"{self.envs.ADMIN_CORE_URL}{path}"
+        try:
+            async with httpx.AsyncClient(timeout=_TIMEOUT_SECONDS) as client:
+                response = await client.post(
+                    url,
+                    json=body,
+                    headers={"apikey": self.envs.ADMIN_CORE_API_KEY or ""},
+                )
+        except httpx.HTTPError as e:
+            self.logger.Error(f"Failed to reach ms-administrative-core at {path}", e)
+            return None
+
+        if response.status_code != 200:
+            self.logger.Warning(f"ms-administrative-core answered {response.status_code} for {path}")
+            return None
+
+        return response.json()

@@ -49,6 +49,9 @@ class Environments:
     ADMIN_CORE_URL: str | None
     ADMIN_CORE_API_KEY: str | None
 
+    # Public HTTPS URL of this MCP server. Empty keeps the tool open (no OAuth).
+    SELF_MCP_URL: str | None
+
     # Supabase Storage
     SUPABASE_URL: str | None
     SUPABASE_SERVICE_ROLE_KEY: str | None
@@ -90,6 +93,8 @@ class Environments:
         # ms-administrative-core (via Kong gateway) -- authority on the user's unit
         self.ADMIN_CORE_URL = os.getenv("ADMIN_CORE_URL")
         self.ADMIN_CORE_API_KEY = os.getenv("ADMIN_CORE_API_KEY")
+
+        self.SELF_MCP_URL = os.getenv("SELF_MCP_URL") or None
 
         # Supabase Storage
         self.SUPABASE_URL = os.getenv("SUPABASE_URL")
