@@ -4,6 +4,7 @@ uvicorn
 
 # Agents
 langgraph
+langgraph-checkpoint-redis
 langchain
 langchain_google_genai
 langchain_community

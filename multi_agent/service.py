@@ -36,7 +36,8 @@ from .prompt.guardrail_out import GUARDRAIL_OUT_SYSTEM_PROMPT_FINAL
 from .prompt.preferences_agent import PREFERENCES_AGENT_SYSTEM_PROMPT_FINAL
 
 # checkpointer / thread cache
-from langgraph.checkpoint.memory import MemorySaver
+from langgraph.checkpoint.base import BaseCheckpointSaver
+from langgraph.checkpoint.redis import RedisSaver
 from .thread_cache import ThreadCacheEntry, ThreadCache, message_to_base_message, render_preferences
 from .agents.message_utils import parse_json_message
 
@@ -75,7 +76,7 @@ class MultiAgentService(IMultiAgentService):
 
     graph: Optional[StateGraph[State]] = None
     compiled_graph: Optional[CompiledStateGraph[State]] = None
-    checkpointer: MemorySaver
+    checkpointer: BaseCheckpointSaver
     guardrail: Guardrail
     faq: FAQ
     preferences_agent: CompiledStateGraph
@@ -351,7 +352,8 @@ class MultiAgentService(IMultiAgentService):
         new_graph.add_edge(AgentName.GUARDRAIL_OUT, AgentName.END)
 
         self.graph = new_graph
-        self.checkpointer = MemorySaver()
+        self.checkpointer = RedisSaver(redis_url=self.envs.REDIS_URL)
+        self.checkpointer.setup()
         self.compiled_graph = new_graph.compile(checkpointer=self.checkpointer)
 
     def _hydrate_thread(self, user_id: UUID, thread_id: UUID) -> ThreadCacheEntry:
