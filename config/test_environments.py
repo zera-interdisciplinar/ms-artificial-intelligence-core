@@ -6,6 +6,7 @@ ENV_VARS = [
     "APP_ENV",
     "GEMINI_API_KEY",
     "MONGO_URI",
+    "REDIS_URL",
     "MONGO_DB_NAME",
     "MONGO_USERNAME",
     "MONGO_PASSWORD",
@@ -24,6 +25,7 @@ def test_defaults_are_applied_when_env_is_empty(clean_env):
 
     assert envs.APP_ENV == "DEV"
     assert envs.MONGO_URI == "mongodb://localhost:27017"
+    assert envs.REDIS_URL == "redis://localhost:6379"
     assert envs.MONGO_DB_NAME == "ms-artificial-intelligence-core"
 
 
@@ -37,6 +39,7 @@ def test_env_values_override_defaults(clean_env, monkeypatch):
     monkeypatch.setenv("APP_ENV", "PROD")
     monkeypatch.setenv("GEMINI_API_KEY", "gemini-key")
     monkeypatch.setenv("MONGO_URI", "mongodb://mongo:27017")
+    monkeypatch.setenv("REDIS_URL", "redis://redis:6379/0")
     monkeypatch.setenv("MONGO_DB_NAME", "zera")
     monkeypatch.setenv("MONGO_USERNAME", "zera-user")
     monkeypatch.setenv("MONGO_PASSWORD", "s3cret")
@@ -46,6 +49,7 @@ def test_env_values_override_defaults(clean_env, monkeypatch):
     assert envs.APP_ENV == "PROD"
     assert envs.GEMINI_API_KEY == "gemini-key"
     assert envs.MONGO_URI == "mongodb://mongo:27017"
+    assert envs.REDIS_URL == "redis://redis:6379/0"
     assert envs.MONGO_DB_NAME == "zera"
     assert envs.MONGO_USERNAME == "zera-user"
     assert envs.MONGO_PASSWORD == "s3cret"

@@ -9,8 +9,11 @@ services:
       - "8000:8000" # Mapeia a porta 8000 do container para a porta 8000 do host
     env_file:
       - .env
+    environment:
+      - REDIS_URL=redis://redis:6379
     depends_on:
       - mongo # Garante que o serviço de banco de dados seja iniciado antes da API
+      - redis
   
   # banco de dados usado pela API
   mongo:
@@ -24,6 +27,15 @@ services:
       - MONGO_INITDB_ROOT_USERNAME=${MONGO_USERNAME}
       - MONGO_INITDB_ROOT_PASSWORD=${MONGO_PASSWORD}
 
+  redis:
+    image: redis/redis-stack-server:7.4.0-v3
+    container_name: redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+
 # volumes para persistência de dados
 volumes:
   mongo-data:
+  redis-data:

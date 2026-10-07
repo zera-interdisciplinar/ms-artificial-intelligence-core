@@ -65,6 +65,8 @@ spec:
             secretKeyRef:
               name: ms-artificial-intelligence-core-secrets
               key: PREDICT_MODEL_API_KEY
+        - name: REDIS_URL
+          value: "redis://redis:6379/0"
         - name: MONGO_URI
           valueFrom:
             secretKeyRef:

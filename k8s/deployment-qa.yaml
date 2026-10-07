@@ -53,6 +53,8 @@ spec:
           value: "8000"
         - name: APP_HOST
           value: "0.0.0.0"
+        - name: REDIS_URL
+          value: "redis://redis:6379/0"
         - name: MONGO_URI
           valueFrom:
             secretKeyRef:
