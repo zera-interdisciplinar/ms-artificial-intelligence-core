@@ -278,7 +278,7 @@ class TestSetup:
     @patch("multi_agent.service.MultiServerMCPClient")
     @patch("multi_agent.service.FAQ")
     @patch("multi_agent.service.StateGraph")
-    @patch("multi_agent.service.RedisSaver")
+    @patch("multi_agent.service.AsyncRedisSaver")
     @patch("multi_agent.service.create_agent")
     @patch("multi_agent.service.ChatGroq")
     @patch("multi_agent.service.ChatGoogleGenerativeAI")

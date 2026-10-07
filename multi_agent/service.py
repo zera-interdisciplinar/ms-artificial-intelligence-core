@@ -37,7 +37,7 @@ from .prompt.preferences_agent import PREFERENCES_AGENT_SYSTEM_PROMPT_FINAL
 
 # checkpointer / thread cache
 from langgraph.checkpoint.base import BaseCheckpointSaver
-from langgraph.checkpoint.redis import RedisSaver
+from .async_redis_saver import AsyncRedisSaver
 from .thread_cache import ThreadCacheEntry, ThreadCache, message_to_base_message, render_preferences
 from .agents.message_utils import parse_json_message
 
@@ -352,7 +352,7 @@ class MultiAgentService(IMultiAgentService):
         new_graph.add_edge(AgentName.GUARDRAIL_OUT, AgentName.END)
 
         self.graph = new_graph
-        self.checkpointer = RedisSaver(redis_url=self.envs.REDIS_URL)
+        self.checkpointer = AsyncRedisSaver(redis_url=self.envs.REDIS_URL)
         self.checkpointer.setup()
         self.compiled_graph = new_graph.compile(checkpointer=self.checkpointer)
 
