@@ -8,12 +8,16 @@ It have two main flows:
 - process message flow: the user will send a message to the MCP server and the server will process the message and return the response. The message will be processed by the multi agent service.
 """
 
+from urllib.parse import urlparse
 from uuid import UUID, uuid4
 
-from mcp.server.auth.settings import AuthSettings, ClientRegistrationOptions
+from mcp.server.auth.routes import build_metadata
+from mcp.server.auth.settings import AuthSettings, ClientRegistrationOptions, RevocationOptions
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
 from pydantic import AnyHttpUrl
+from starlette.requests import Request
+from starlette.responses import JSONResponse, Response
 
 from _internal.admin_core.client import AdminCoreClient
 from _internal.mcp.acl import acl_process_message
@@ -93,12 +97,15 @@ def build_mcp(
 
     auth = None
     provider = None
-    if envs.SELF_MCP_URL:
-        issuer = AnyHttpUrl(envs.SELF_MCP_URL)
-        provider = ZeraOAuthProvider(admin_core, envs.SELF_MCP_URL, logger)
+    issuer_url = (envs.SELF_MCP_URL or "").rstrip("/")
+    if issuer_url:
+        issuer = AnyHttpUrl(issuer_url)
+        # The tool lives at {issuer}/mcp. Claude looks up OAuth metadata on the host root.
+        resource = AnyHttpUrl(issuer_url + "/mcp")
+        provider = ZeraOAuthProvider(admin_core, issuer_url, logger)
         auth = AuthSettings(
             issuer_url=issuer,
-            resource_server_url=issuer,
+            resource_server_url=resource,
             client_registration_options=ClientRegistrationOptions(enabled=True),
         )
 
@@ -115,6 +122,7 @@ def build_mcp(
     )
     if provider is not None:
         mount_login(mcp, provider)
+        _mount_issuer_metadata(mcp, issuer_url)
 
     @mcp.tool(name="ask_zera", description=ASK_ZERA_DESCRIPTION)
     async def ask_zera(content: str, ctx: Context, thread_id: str | None = None) -> dict:
@@ -126,3 +134,30 @@ def build_mcp(
         return await ask_zera_impl(service, admin_core, logger, authorization, content, thread_id)
 
     return mcp
+
+
+def _mount_issuer_metadata(mcp: FastMCP, issuer_url: str) -> None:
+    """Claude fetches /.well-known/oauth-authorization-server + the issuer path.
+
+    FastMCP only registers the path without that suffix. The gateway does not
+    strip /.well-known, so the suffix has to exist on this app.
+    """
+
+    suffix = urlparse(issuer_url).path.rstrip("/")
+    if not suffix:
+        return
+
+    metadata = build_metadata(
+        AnyHttpUrl(issuer_url),
+        None,
+        ClientRegistrationOptions(enabled=True),
+        RevocationOptions(),
+    )
+    body = metadata.model_dump(mode="json", exclude_none=True)
+
+    @mcp.custom_route(
+        f"/.well-known/oauth-authorization-server{suffix}",
+        methods=["GET", "OPTIONS"],
+    )
+    async def issuer_metadata(_request: Request) -> Response:
+        return JSONResponse(body)
