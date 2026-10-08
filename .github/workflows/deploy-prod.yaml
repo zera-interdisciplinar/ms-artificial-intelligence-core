@@ -54,6 +54,7 @@ jobs:
           kubectl apply -f k8s/redis.yaml -n production
           kubectl apply -f k8s/deployment.yaml -n production
           kubectl apply -f k8s/service.yaml -n production
+          kubectl apply -f k8s/ingress-mcp.yaml -n production
           kubectl rollout status deployment/ms-artificial-intelligence-core -n production --timeout=120s
 
       - name: Annotate Deployment
