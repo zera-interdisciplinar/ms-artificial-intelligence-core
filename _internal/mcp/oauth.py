@@ -8,6 +8,7 @@ The refresh token from admin-core stays here. ask_zera still reads the Bearer.
 
 import html
 import secrets
+from pathlib import Path
 import time
 from urllib.parse import urlencode
 from uuid import uuid4
@@ -195,22 +196,12 @@ class ZeraOAuthProvider(
         )
 
 
+_LOGIN_HTML = Path(__file__).with_name("login.html").read_text(encoding="utf-8")
+
+
 def _login_page(txn: str, error: str | None) -> HTMLResponse:
-    message = f"<p>{html.escape(error)}</p>" if error else ""
-    body = f"""<!doctype html>
-<html lang="pt-BR">
-<head><meta charset="utf-8"><title>Entrar na Zera</title></head>
-<body>
-<h1>Entrar na Zera</h1>
-{message}
-<form method="post" action="/login">
-<input type="hidden" name="txn" value="{html.escape(txn)}">
-<label>E-mail <input name="email" type="email" required></label>
-<label>Senha <input name="password" type="password" required></label>
-<button type="submit">Entrar</button>
-</form>
-</body>
-</html>"""
+    message = f'<p class="error">{html.escape(error)}</p>' if error else ""
+    body = _LOGIN_HTML.replace("__TXN__", html.escape(txn)).replace("__ERROR__", message)
     return HTMLResponse(body)
 
 
