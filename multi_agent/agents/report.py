@@ -3,6 +3,7 @@ from typing import Any
 from langgraph.graph.state import CompiledStateGraph
 
 from ..entity import State, AgentName, GraphNodeFunc
+from ..unit_scope import set_unit_id
 from .message_utils import parse_json_message, request_with_history
 from .report_template import render_quote_report
 from logger.logger import Logger
@@ -17,6 +18,7 @@ def make_report_func(report_agent: CompiledStateGraph) -> GraphNodeFunc:
     """
 
     async def report_func(state: State) -> dict[str, Any]:
+        set_unit_id(state.get("unit_id"))
         request = request_with_history(
             state["current_request"], state.get("messages"), state.get("user_preferences")
         )

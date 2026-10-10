@@ -115,10 +115,13 @@ class IMultiAgentService(Protocol):
         """
         ...
 
-    async def create_disposal_report(self, user_id: UUID, disposal_id: str) -> str:
+    async def create_disposal_report(self, user_id: UUID, disposal_id: str, authorization: str) -> str:
         """
         Generate and store the PDF for one disposal, or return the URL already stored.
+        authorization is the caller's Authorization header, forwarded to resolve the
+        user's unit before get_disposal_report runs.
         Raise MultiAgentServiceException if generation or upload fails.
+        Raise UnitMismatchException if the user's unit cannot be resolved.
         """
         ...
 

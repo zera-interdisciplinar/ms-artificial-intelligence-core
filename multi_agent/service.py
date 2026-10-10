@@ -238,14 +238,19 @@ class MultiAgentService(IMultiAgentService):
             tools=[predict_time_to_failure_batch],
         )
 
+        # discovers the ms-inventory MCP tools; the LLM decides at runtime which
+        # to call. Both agents see the whole set. get_disposal_report must be there.
+        self.logger.Info("Fetching ms-inventory MCP tools")
+        inventory_tools = asyncio.run(self._fetch_ms_inventory_tools())
+        assert any(tool.name == "get_disposal_report" for tool in inventory_tools), (
+            "ms-inventory MCP did not return get_disposal_report "
+            f"(got: {sorted(tool.name for tool in inventory_tools)})"
+        )
         report_agent = create_agent(
             model=llm_fast,
             system_prompt=REPORT_AGENT_SYSTEM_PROMPT_FINAL,
+            tools=inventory_tools,
         )
-
-        # discovers the ms-inventory MCP tools; the LLM decides at runtime which
-        self.logger.Info("Fetching ms-inventory MCP tools")
-        inventory_tools = asyncio.run(self._fetch_ms_inventory_tools())
         inventory_agent = create_agent(
             model=llm,
             system_prompt=INVENTORY_AGENT_SYSTEM_PROMPT_FINAL,
@@ -550,19 +555,26 @@ class MultiAgentService(IMultiAgentService):
             agent_trace = end_state["called_agents"],
         )
 
-    async def create_disposal_report(self, user_id: UUID, disposal_id: str) -> str:
+    async def create_disposal_report(self, user_id: UUID, disposal_id: str, authorization: str) -> str:
         """
         Generate and store the PDF for one disposal, or return the URL already stored.
         Uses the same report agent as the chat; only this path uploads the PDF.
+        The disposal_id goes in the request so the agent can call get_disposal_report.
+        unit_id is resolved here and injected into that tool, the same way the chat does.
         """
         existing = self.repository.get_disposal_report(disposal_id)
         if existing is not None:
             return existing.report_url
 
+        unit_id = await self.admin_core.get_unit_id(user_id, authorization)
+        if unit_id is None:
+            raise UnitMismatchException(f"unit_id does not belong to user {user_id}")
+
         result = await self.report_node({
             "current_request": f"Gere o relatório do descarte {disposal_id}.",
             "messages": [],
             "user_preferences": None,
+            "unit_id": str(unit_id),
         })
         pdf_bytes = self.pdf_renderer.render(result["report_html"])
         report_url = self.storage_service.upload(

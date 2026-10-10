@@ -8,6 +8,7 @@ import pytest
 
 from .exception import MultiAgentServiceNotSetupException, UnitMismatchException
 from .entity import AgentName, AgentResponse, Message, Role
+from .prompt.report_agent import REPORT_AGENT_SYSTEM_PROMPT_FINAL
 from .service import MultiAgentService
 from .thread_cache import ThreadCacheEntry
 USER_ID = UUID("11111111-1111-1111-1111-111111111111")
@@ -237,10 +238,12 @@ class TestDisposalReport:
         service.pdf_renderer.render.return_value = b"%PDF-1.7"
         service.storage_service.upload.return_value = "https://storage/disposal-42.pdf"
 
-        url = asyncio.run(service.create_disposal_report(USER_ID, "42"))
+        url = asyncio.run(service.create_disposal_report(USER_ID, "42", "Bearer test-token"))
 
         service.report_node.assert_awaited_once()
-        assert "42" in service.report_node.await_args.args[0]["current_request"]
+        state = service.report_node.await_args.args[0]
+        assert "42" in state["current_request"]
+        assert state["unit_id"] == str(UNIT_ID)
         service.pdf_renderer.render.assert_called_once_with("<html>descarte</html>")
         _, upload_kwargs = service.storage_service.upload.call_args
         assert upload_kwargs["filename"] == "disposal-42.pdf"
@@ -256,7 +259,7 @@ class TestDisposalReport:
         service.repository.get_disposal_report.return_value = existing
         service.report_node = AsyncMock()
 
-        url = asyncio.run(service.create_disposal_report(USER_ID, "42"))
+        url = asyncio.run(service.create_disposal_report(USER_ID, "42", "Bearer test-token"))
 
         assert url == "https://storage/already.pdf"
         service.report_node.assert_not_awaited()
@@ -272,6 +275,16 @@ class TestDisposalReport:
         service.repository.get_disposal_report.return_value = None
 
         assert service.get_disposal_report("42") is None
+
+    def test_refuses_when_the_user_unit_cannot_be_resolved(self, service):
+        service.repository.get_disposal_report.return_value = None
+        service.admin_core.get_unit_id = AsyncMock(return_value=None)
+        service.report_node = AsyncMock()
+
+        with pytest.raises(UnitMismatchException):
+            asyncio.run(service.create_disposal_report(USER_ID, "42", "Bearer test-token"))
+
+        service.report_node.assert_not_called()
 
 
 class TestSetup:
@@ -297,8 +310,16 @@ class TestSetup:
         climate_zones_tool = MagicMock(name="list_valid_climate_zones")
         climate_zones_tool.name = "list_valid_climate_zones"
         climate_zones_tool.ainvoke = AsyncMock(return_value=["TROPICAL"])
+        disposal_report_tool = MagicMock(name="get_disposal_report")
+        disposal_report_tool.name = "get_disposal_report"
+        search_tool = MagicMock(name="search_inventory")
+        search_tool.name = "search_inventory"
+        inventory_tools = [search_tool, disposal_report_tool]
         mock_mcp_client.return_value.get_tools = AsyncMock(
-            return_value=[predict_batch_tool, categories_tool, climate_zones_tool]
+            side_effect=[
+                [predict_batch_tool, categories_tool, climate_zones_tool],
+                inventory_tools,
+            ]
         )
 
         service.setup()
@@ -331,6 +352,11 @@ class TestSetup:
         mock_redis_saver.return_value.setup.assert_called_once_with()
         assert service.checkpointer is mock_redis_saver.return_value
         mock_graph.compile.assert_called_once_with(checkpointer=service.checkpointer)
+        report_agent_call = next(
+            call for call in mock_create_agent.call_args_list
+            if call.kwargs.get("system_prompt") is REPORT_AGENT_SYSTEM_PROMPT_FINAL
+        )
+        assert report_agent_call.kwargs["tools"] == inventory_tools
 
 
 class TestFetchPredictModelTools:

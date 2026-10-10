@@ -70,9 +70,16 @@ def report_handlers(service: IMultiAgentService) -> APIRouter:
     new_router = APIRouter(prefix="/reports", tags=["reports"])
 
     @new_router.post("")
-    async def create_disposal_report_endpoint(request: DisposalReportRequest) -> DisposalReportResponse:
+    async def create_disposal_report_endpoint(
+        request: DisposalReportRequest, authorization: str = Header(...)
+    ) -> DisposalReportResponse:
         """Generate the PDF for a disposal, or return the URL already stored for that id."""
-        report_url = await service.create_disposal_report(request.user_id, request.disposal_id)
+        try:
+            report_url = await service.create_disposal_report(
+                request.user_id, request.disposal_id, authorization
+            )
+        except UnitMismatchException:
+            raise HTTPException(status_code=403, detail="unit_id does not belong to this user")
         return DisposalReportResponse(report_url=report_url)
 
     @new_router.get("/{disposal_id}")
