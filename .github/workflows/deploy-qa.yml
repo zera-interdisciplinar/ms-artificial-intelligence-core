@@ -50,6 +50,7 @@ jobs:
           kubectl apply -f k8s/mongodb-qa.yaml -n qa
           kubectl apply -f k8s/deployment-qa.yaml -n qa
           kubectl apply -f k8s/service-qa.yaml -n qa
+          kubectl apply -f k8s/ingress-mcp-qa.yaml -n qa
           kubectl rollout status deployment/ms-artificial-intelligence-core -n qa --timeout=120s
 
       - name: Annotate Deployment
