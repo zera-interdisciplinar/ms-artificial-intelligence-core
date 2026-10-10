@@ -132,3 +132,5 @@ spec:
             secretKeyRef:
               name: ms-artificial-intelligence-core-secrets
               key: ADMIN_CORE_API_KEY
+        - name: SELF_MCP_URL
+          value: "https://www.zeratech.online/qa/ai-core"

@@ -1,0 +1,61 @@
+# Connector do Claude: sem apikey. O host descobre OAuth sozinho e guarda o Bearer.
+# regex-priority 1000 ganha do Prefix /qa/ai-core (que continua com apikey na API).
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ms-artificial-intelligence-core-mcp-qa
+  namespace: qa
+  annotations:
+    kubernetes.io/ingress.class: "kong"
+    konghq.com/strip-path: "true"
+    konghq.com/regex-priority: "1000"
+spec:
+  ingressClassName: kong
+  tls:
+    - hosts:
+        - www.zeratech.online
+      secretName: gateway-tls
+  rules:
+  - http:
+      paths:
+      - path: /~/qa/ai-core(?=/(mcp|login|authorize|token|register|\.well-known)(/|$))
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: ms-artificial-intelligence-core
+            port:
+              number: 80
+---
+# RFC 9728 / RFC 8414: Claude bate em /.well-known/.../{issuer-path}, nao em /qa/ai-core.
+# strip-path false: o FastMCP registra o path completo.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ms-artificial-intelligence-core-mcp-well-known-qa
+  namespace: qa
+  annotations:
+    kubernetes.io/ingress.class: "kong"
+    konghq.com/strip-path: "false"
+spec:
+  ingressClassName: kong
+  tls:
+    - hosts:
+        - www.zeratech.online
+      secretName: gateway-tls
+  rules:
+  - http:
+      paths:
+      - path: /.well-known/oauth-protected-resource/qa/ai-core/mcp
+        pathType: Prefix
+        backend:
+          service:
+            name: ms-artificial-intelligence-core
+            port:
+              number: 80
+      - path: /.well-known/oauth-authorization-server/qa/ai-core
+        pathType: Prefix
+        backend:
+          service:
+            name: ms-artificial-intelligence-core
+            port:
+              number: 80
