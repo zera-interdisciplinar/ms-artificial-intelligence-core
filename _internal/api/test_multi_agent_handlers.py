@@ -161,13 +161,28 @@ class TestDisposalReportEndpoints:
         user_id = uuid4()
 
         response = _report_client(service).post(
-            "/reports", json={"user_id": str(user_id), "disposal_id": "42"}
+            "/reports",
+            json={"user_id": str(user_id), "disposal_id": "42"},
+            headers={"Authorization": "Bearer test-token"},
         )
 
         assert response.status_code == 200
         assert response.json() == {"report_url": "https://storage/disposal-42.pdf"}
         service.create_disposal_report.assert_awaited_once()
         assert service.create_disposal_report.await_args.args[1] == "42"
+        assert service.create_disposal_report.await_args.args[2] == "Bearer test-token"
+
+    def test_answers_403_when_the_user_unit_cannot_be_resolved(self):
+        service = MagicMock()
+        service.create_disposal_report = AsyncMock(side_effect=UnitMismatchException("no unit"))
+
+        response = _report_client(service).post(
+            "/reports",
+            json={"user_id": str(uuid4()), "disposal_id": "42"},
+            headers={"Authorization": "Bearer test-token"},
+        )
+
+        assert response.status_code == 403
 
     def test_returns_the_stored_url(self):
         service = MagicMock()

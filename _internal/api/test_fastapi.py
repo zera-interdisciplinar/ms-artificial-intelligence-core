@@ -251,14 +251,16 @@ def test_report_agent(client: TestClient, auth_headers: dict) -> None:
     assert not response.blocked
 
 
-def test_disposal_report_returns_a_stored_url(client: TestClient) -> None:
+def test_disposal_report_returns_a_stored_url(client: TestClient, auth_headers: dict) -> None:
     """
     A disposal report is generated outside the chat, stored, and readable by disposal id.
     """
     disposal_id = _new_UUID()
     body = DisposalReportRequest(user_id=INTEGRATION_USER_ID, disposal_id=disposal_id)
 
-    created: Response = client.post("/api/v1/reports", json=body.model_dump(mode="json"))
+    created: Response = client.post(
+        "/api/v1/reports", json=body.model_dump(mode="json"), headers=auth_headers
+    )
 
     assert created.status_code == 200
     report_url = created.json()["report_url"]
