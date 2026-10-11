@@ -1,14 +1,12 @@
 """
 Who is calling the MCP server.
-The host already did the login and kept the Bearer. Here we only read that token
-and ask ms-administrative-core which unit the user belongs to.
+The host already did the login and kept the Bearer. Here we only read the user
+from that token; process_message asks ms-administrative-core for the unit.
 """
 
 import base64
 import json
 from uuid import UUID
-
-from _internal.admin_core.client import AdminCoreClient
 
 
 def user_id_from_authorization(authorization: str) -> UUID:
@@ -39,16 +37,3 @@ def user_id_from_authorization(authorization: str) -> UUID:
 
     return UUID(str(raw_user_id))
 
-
-async def resolve_caller(admin_core: AdminCoreClient, authorization: str) -> tuple[UUID, UUID]:
-    """
-    Login result, already done by the host: token in, user and unit out.
-    The unit comes from ms-administrative-core, not from a tool argument.
-    """
-
-    user_id = user_id_from_authorization(authorization)
-    unit_id = await admin_core.get_unit_id(user_id, authorization)
-    if unit_id is None:
-        raise ValueError("could not resolve unit")
-
-    return user_id, unit_id

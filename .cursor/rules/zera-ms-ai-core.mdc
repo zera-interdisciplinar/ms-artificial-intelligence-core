@@ -17,7 +17,8 @@ API FastAPI + LangGraph (guardrail in/out, orchestrator, faq, report, predict_mo
 - Agentes crus devolvem `{"messages": [...]}`; wrappers fazem parse do JSON da última mensagem.
 - Payloads para sub-agentes: `HumanMessage`, não segunda `SystemMessage`.
 - Integrações cross-repo (ms-inventory, ms-adm-core, predict_model): **MCP**, não SDK direto.
-- Agentes de execução única por turno usam `state["current_request"]`; só `guardrail_in` lê `state["messages"][-1]`.
+- Orchestrator e especialistas recebem `request_with_history(current_request, ...)`; judge só `current_request`; só `guardrail_in` lê `state["messages"][-1]`.
+- Hexagonal: portas em `multi_agent/multi_agent.py`; adaptadores concretos só em `app/api/composition.py`; topologia em `multi_agent/graph.py`.
 - Testes `test_*.py` ao lado do código testado.
 
 Spec: `docs/this-project-overview.md`. Integração predict: `docs/integration-predict-time-to-failure.md`.

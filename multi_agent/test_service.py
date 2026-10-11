@@ -5,29 +5,32 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import UUID
 
 import pytest
+from langchain.messages import AIMessage, HumanMessage, RemoveMessage, SystemMessage
+from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.graph import StateGraph
 
 from .exception import MultiAgentServiceNotSetupException, UnitMismatchException
-from .entity import AgentName, AgentResponse, Message, Role
+from .entity import AgentName, AgentResponse, DisposalReport, Message, Role, State, UserPreferences
 from .prompt.report_agent import REPORT_AGENT_SYSTEM_PROMPT_FINAL
-from .service import MultiAgentService
-from .thread_cache import ThreadCacheEntry
+from .service import MultiAgentService, message_to_base_message, render_preferences
+
 USER_ID = UUID("11111111-1111-1111-1111-111111111111")
 THREAD_ID = UUID("22222222-2222-2222-2222-222222222222")
 UNIT_ID = UUID("33333333-3333-3333-3333-333333333333")
 OTHER_UNIT_ID = UUID("44444444-4444-4444-4444-444444444444")
+BEARER = "Bearer test-token"
+
+END_STATE = {
+    "final_response": "resposta",
+    "blocked": False,
+    "blocked_reason": None,
+    "called_agents": [AgentName.GUARDRAIL_IN, AgentName.ORCHESTRATOR],
+    "report_html": None,
+}
 
 
 @pytest.fixture
-def envs() -> Any:
-    envs = MagicMock()
-    envs.GEMINI_API_KEY = "fake-key"
-    envs.SESSION_TTL_SECONDS = 3600
-    envs.SESSION_HISTORY_LIMIT = 50
-    return envs
-
-
-@pytest.fixture
-def admin_core() -> Any:
+def unit_resolver() -> Any:
     """admin-core double that puts USER_ID in UNIT_ID, the happy path for every test
     that is not about the unit check itself."""
 
@@ -37,198 +40,234 @@ def admin_core() -> Any:
 
 
 @pytest.fixture
-def service(envs: Any, admin_core: Any) -> MultiAgentService:
+def service(unit_resolver: Any) -> MultiAgentService:
     repository = MagicMock()
     repository.retrieve_messages.return_value = []
     repository.get_preferences.return_value = None
     return MultiAgentService(
         repository=cast(Any, repository),
-        envs=envs,
+        session_history_limit=50,
         logger=cast(Any, MagicMock()),
         pdf_renderer=cast(Any, MagicMock()),
         storage_service=cast(Any, MagicMock()),
-        admin_core=cast(Any, admin_core),
+        unit_resolver=cast(Any, unit_resolver),
+        llm=cast(Any, MagicMock()),
+        llm_fast=cast(Any, MagicMock()),
+        checkpointer=cast(Any, MagicMock()),
+        faq_retriever=cast(Any, MagicMock()),
+        predict_tool=cast(Any, MagicMock()),
+        valid_categories=["notebook"],
+        valid_climate_zones=["TROPICAL"],
+        inventory_tools=[],
     )
 
 
-def _stub_graph(service: MultiAgentService, end_state: dict) -> MagicMock:
-    """Wires a fake compiled graph as `service.compiled_graph`, the single graph
-    shared by every thread (no per-thread compile)."""
+def _stub_graph(service: MultiAgentService, end_state: dict, checkpoint: dict | None = None) -> MagicMock:
+    """Fake compiled graph; `checkpoint` is what the shared Redis checkpointer already holds."""
+
+    async def ainvoke(state, config):
+        # guardrail_in keeps the user message id, so the end state carries it back
+        return {"messages": state["messages"], **end_state}
 
     compiled = MagicMock()
-    compiled.ainvoke = AsyncMock(return_value=end_state)
+    compiled.ainvoke = AsyncMock(side_effect=ainvoke)
+    compiled.aget_state = AsyncMock(return_value=MagicMock(values=checkpoint or {}))
+    compiled.aupdate_state = AsyncMock()
     service.compiled_graph = compiled
-    service.checkpointer = MagicMock()
     return compiled
+
+
+def _process(service: MultiAgentService, unit_id: UUID | None = UNIT_ID) -> AgentResponse:
+    return asyncio.run(service.process_message("olá", USER_ID, THREAD_ID, unit_id, BEARER))
 
 
 class TestUnitValidation:
     """The request only proposes a unit; ms-administrative-core decides. Nothing
     here may fall back to an unscoped read."""
 
-    def test_rejects_a_unit_that_is_not_the_users(self, service, admin_core):
-        admin_core.get_unit_id = AsyncMock(return_value=OTHER_UNIT_ID)
+    def test_rejects_a_unit_that_is_not_the_users(self, service, unit_resolver):
+        unit_resolver.get_unit_id = AsyncMock(return_value=OTHER_UNIT_ID)
         compiled = _stub_graph(service, {})
 
         with pytest.raises(UnitMismatchException):
-            asyncio.run(service.process_message("olá", USER_ID, THREAD_ID, UNIT_ID, "Bearer test-token"))
+            _process(service)
 
         compiled.ainvoke.assert_not_called()
 
-    def test_rejects_when_the_admin_core_cannot_resolve_the_user(self, service, admin_core):
-        admin_core.get_unit_id = AsyncMock(return_value=None)
+    def test_rejects_when_the_admin_core_cannot_resolve_the_user(self, service, unit_resolver):
+        unit_resolver.get_unit_id = AsyncMock(return_value=None)
         compiled = _stub_graph(service, {})
 
         with pytest.raises(UnitMismatchException):
-            asyncio.run(service.process_message("olá", USER_ID, THREAD_ID, UNIT_ID, "Bearer test-token"))
+            _process(service, unit_id=None)
 
         compiled.ainvoke.assert_not_called()
 
     def test_puts_the_validated_unit_in_the_initial_state(self, service):
-        compiled = _stub_graph(service, {
-            "final_response": "ok",
-            "blocked": False,
-            "blocked_reason": None,
-            "called_agents": [AgentName.ORCHESTRATOR],
-            "report_html": None,
-        })
+        compiled = _stub_graph(service, END_STATE)
 
-        asyncio.run(service.process_message("olá", USER_ID, THREAD_ID, UNIT_ID, "Bearer test-token"))
+        _process(service)
 
-        initial_state = compiled.ainvoke.call_args.args[0]
-        assert initial_state["unit_id"] == str(UNIT_ID)
+        assert compiled.ainvoke.call_args.args[0]["unit_id"] == str(UNIT_ID)
+
+    def test_uses_the_users_unit_when_none_is_claimed(self, service, unit_resolver):
+        compiled = _stub_graph(service, END_STATE)
+
+        _process(service, unit_id=None)
+
+        unit_resolver.get_unit_id.assert_awaited_once_with(USER_ID, BEARER)
+        assert compiled.ainvoke.call_args.args[0]["unit_id"] == str(UNIT_ID)
 
 
 class TestProcessMessage:
     def test_raises_when_the_service_has_not_been_setup(self, service):
         with pytest.raises(MultiAgentServiceNotSetupException):
-            asyncio.run(service.process_message("olá", USER_ID, THREAD_ID, UNIT_ID, "Bearer test-token"))
+            _process(service)
 
     def test_returns_agent_response_built_from_the_graph_end_state(self, service):
-        _stub_graph(service, {
-            "final_response": "três perfis",
-            "blocked": False,
-            "blocked_reason": None,
-            "called_agents": [AgentName.GUARDRAIL_IN, AgentName.ORCHESTRATOR],
-            "report_html": None,
-        })
+        _stub_graph(service, END_STATE)
 
-        response = asyncio.run(service.process_message("quais perfis existem?", USER_ID, THREAD_ID, UNIT_ID, "Bearer test-token"))
-
-        assert response == AgentResponse(
-            content="três perfis",
+        assert _process(service) == AgentResponse(
+            content="resposta",
             blocked=False,
             blocked_reason=None,
             agent_trace=[AgentName.GUARDRAIL_IN, AgentName.ORCHESTRATOR],
         )
 
     def test_invokes_the_graph_with_user_and_thread_ids_configured(self, service):
-        compiled = _stub_graph(service, {
-            "final_response": "resposta",
-            "blocked": True,
-            "blocked_reason": "conteúdo sensível",
-            "called_agents": [],
-            "report_html": None,
-        })
+        compiled = _stub_graph(service, END_STATE)
 
-        asyncio.run(service.process_message("olá", USER_ID, THREAD_ID, UNIT_ID, "Bearer test-token"))
+        _process(service)
 
-        _, kwargs = compiled.ainvoke.call_args
-        assert kwargs["config"]["configurable"] == {
+        assert compiled.ainvoke.call_args.kwargs["config"]["configurable"] == {
             "user_id": USER_ID,
             "thread_id": THREAD_ID,
         }
 
-    def test_reuses_the_cached_thread_on_the_second_call(self, service):
-        compiled = _stub_graph(service, {
-            "final_response": "resposta",
-            "blocked": False,
-            "blocked_reason": None,
-            "called_agents": [],
-            "report_html": None,
-        })
+    def test_does_not_hydrate_when_the_checkpoint_already_has_the_thread(self, service):
+        compiled = _stub_graph(service, END_STATE, checkpoint={"messages": [HumanMessage(content="oi")]})
 
-        asyncio.run(service.process_message("olá", USER_ID, THREAD_ID, UNIT_ID, "Bearer test-token"))
-        asyncio.run(service.process_message("de novo", USER_ID, THREAD_ID, UNIT_ID, "Bearer test-token"))
+        _process(service)
 
-        # hydration (history/preferences lookup) only happened once; the second call hit the cache.
-        service.repository.retrieve_messages.assert_called_once()
-        assert compiled.ainvoke.call_count == 2
+        service.repository.retrieve_messages.assert_not_called()
+        # only the assistant's reply is fed back; nothing is seeded twice
+        compiled.aupdate_state.assert_awaited_once()
 
-    def test_hydrates_a_new_thread_from_the_repository_history(self, service):
+    def test_hydrates_an_empty_checkpoint_from_the_repository_history(self, service):
         service.repository.retrieve_messages.return_value = [
             Message(
                 user_id=USER_ID, thread_id=THREAD_ID, role=Role.USER,
                 content="oi", agent=None, created_at=datetime.now(timezone.utc),
             ),
         ]
-        compiled = _stub_graph(service, {
-            "final_response": "resposta",
-            "blocked": False,
-            "blocked_reason": None,
-            "called_agents": [],
-            "report_html": None,
-        })
+        service._update_preferences = AsyncMock()
+        compiled = _stub_graph(service, END_STATE)
 
-        asyncio.run(service.process_message("olá", USER_ID, THREAD_ID, UNIT_ID, "Bearer test-token"))
+        _process(service)
 
-        service.repository.retrieve_messages.assert_called_once_with(
-            USER_ID, THREAD_ID, limit=service.envs.SESSION_HISTORY_LIMIT
-        )
-        # first call seeds the checkpoint on hydration; second feeds the assistant's
-        # reply back after the turn completes.
-        assert compiled.update_state.call_count == 2
-        hydration_args, hydration_kwargs = compiled.update_state.call_args_list[0]
-        assert hydration_args[1]["messages"][0].content == "oi"
+        service.repository.retrieve_messages.assert_called_once_with(USER_ID, THREAD_ID, limit=50)
+        # first call seeds the checkpoint; second feeds the assistant's reply back
+        assert compiled.aupdate_state.await_count == 2
+        assert compiled.aupdate_state.await_args_list[0].args[1]["messages"][0].content == "oi"
+
+    def test_refreshes_preferences_when_an_expired_conversation_is_resumed(self, service):
+        history = [Message(
+            user_id=USER_ID, thread_id=THREAD_ID, role=Role.USER,
+            content="oi", agent=None, created_at=datetime.now(timezone.utc),
+        )]
+        service.repository.retrieve_messages.return_value = history
+        service._update_preferences = AsyncMock()
+        _stub_graph(service, END_STATE)
+
+        async def run():
+            await service.process_message("olá", USER_ID, THREAD_ID, UNIT_ID, BEARER)
+            await asyncio.sleep(0)  # let the fire-and-forget task run
+
+        asyncio.run(run())
+
+        service._update_preferences.assert_awaited_once_with(USER_ID, history, None)
+
+    def test_saves_question_and_answer_together_once_the_turn_succeeds(self, service):
+        _stub_graph(service, END_STATE)
+
+        _process(service)
+
+        saved = [call.args[0] for call in service.repository.save_message.call_args_list]
+        assert [(m.role, m.content) for m in saved] == [(Role.USER, "olá"), (Role.ASSISTANT, "resposta")]
+        assert saved[0].created_at <= saved[1].created_at
+
+    def test_a_failed_turn_saves_nothing_and_leaves_no_question_in_the_checkpoint(self, service):
+        compiled = _stub_graph(service, END_STATE)
+        compiled.ainvoke = AsyncMock(side_effect=RuntimeError("llm down"))
+
+        with pytest.raises(RuntimeError):
+            _process(service)
+
+        service.repository.save_message.assert_not_called()
+        update = compiled.aupdate_state.await_args
+        assert update is not None
+        assert isinstance(update.args[1]["messages"][0], RemoveMessage)
+        assert update.kwargs["as_node"] == AgentName.GUARDRAIL_OUT
+
+    def test_rollback_works_on_a_real_checkpointed_graph(self, service):
+        def guardrail_in(state):
+            return {"called_agents": [AgentName.GUARDRAIL_IN]}
+
+        def guardrail_out(state):
+            raise RuntimeError("guardrail_out down")
+
+        graph = StateGraph(State)
+        graph.add_node(AgentName.GUARDRAIL_IN, guardrail_in)
+        graph.add_node(AgentName.GUARDRAIL_OUT, guardrail_out)
+        graph.set_entry_point(AgentName.GUARDRAIL_IN)
+        graph.add_edge(AgentName.GUARDRAIL_IN, AgentName.GUARDRAIL_OUT)
+        service.compiled_graph = graph.compile(checkpointer=InMemorySaver())
+
+        with pytest.raises(RuntimeError):
+            _process(service)
+
+        state = asyncio.run(service.compiled_graph.aget_state(service._config(USER_ID, THREAD_ID)))
+        assert state.values["messages"] == []
+        assert state.next == ()
+
+    def test_does_not_save_or_feed_back_a_message_blocked_at_guardrail_in(self, service):
+        compiled = _stub_graph(service, {**END_STATE, "blocked": True, "called_agents": [AgentName.GUARDRAIL_IN]})
+
+        _process(service)
+
+        service.repository.save_message.assert_not_called()
+        compiled.aupdate_state.assert_not_called()
 
     def test_does_not_upload_a_report_generated_in_chat(self, service):
-        _stub_graph(service, {
-            "final_response": "aqui está o relatório",
-            "blocked": False,
-            "blocked_reason": None,
-            "called_agents": [AgentName.GUARDRAIL_IN, AgentName.REPORT_AGENT],
-            "report_html": "<html><body>relatório</body></html>",
-        })
+        _stub_graph(service, {**END_STATE, "report_html": "<html><body>relatório</body></html>"})
 
-        response = asyncio.run(service.process_message("gere o relatório", USER_ID, THREAD_ID, UNIT_ID, "Bearer test-token"))
+        response = _process(service)
 
         service.pdf_renderer.render.assert_not_called()
         service.storage_service.upload.assert_not_called()
         assert response.report_url is None
 
-    def test_does_not_render_or_upload_when_report_agent_was_not_called(self, service):
-        _stub_graph(service, {
-            "final_response": "três perfis",
-            "blocked": False,
-            "blocked_reason": None,
-            "called_agents": [AgentName.GUARDRAIL_IN, AgentName.ORCHESTRATOR],
-            "report_html": None,
-        })
 
-        response = asyncio.run(service.process_message("quais perfis existem?", USER_ID, THREAD_ID, UNIT_ID, "Bearer test-token"))
+class TestUpdatePreferences:
+    def test_upserts_what_the_preferences_agent_extracted(self, service):
+        service.preferences_agent = MagicMock()
+        service.preferences_agent.ainvoke = AsyncMock(return_value={"messages": [MagicMock(
+            content='{"writing_style": "Informal", "company_context": null, "frequent_requests": ["relatório"]}'
+        )]})
 
-        service.pdf_renderer.render.assert_not_called()
-        service.storage_service.upload.assert_not_called()
-        assert response.report_url is None
+        asyncio.run(service._update_preferences(USER_ID, [], None))
 
-    def test_fires_and_forgets_preferences_update_when_a_thread_cache_entry_expires(self, service):
-        _stub_graph(service, {
-            "final_response": "resposta",
-            "blocked": False,
-            "blocked_reason": None,
-            "called_agents": [],
-            "report_html": None,
-        })
-        expired = ThreadCacheEntry(
-            user_id=USER_ID, thread_id=UUID("33333333-3333-3333-3333-333333333333"),
-        )
-        service.thread_cache.sweep = MagicMock(return_value=[expired])
-        service._update_preferences = AsyncMock()
+        saved = service.repository.upsert_preferences.call_args.args[0]
+        assert saved.writing_style == "Informal"
+        assert saved.frequent_requests == ["relatório"]
 
-        asyncio.run(service.process_message("olá", USER_ID, THREAD_ID, UNIT_ID, "Bearer test-token"))
-        asyncio.run(asyncio.sleep(0))  # let the fire-and-forget task run
+    def test_never_raises(self, service):
+        service.preferences_agent = MagicMock()
+        service.preferences_agent.ainvoke = AsyncMock(side_effect=RuntimeError("llm down"))
 
-        service._update_preferences.assert_called_once_with(expired)
+        asyncio.run(service._update_preferences(USER_ID, [], None))
+
+        service.logger.Error.assert_called_once()
 
 
 class TestDisposalReport:
@@ -238,9 +277,8 @@ class TestDisposalReport:
         service.pdf_renderer.render.return_value = b"%PDF-1.7"
         service.storage_service.upload.return_value = "https://storage/disposal-42.pdf"
 
-        url = asyncio.run(service.create_disposal_report(USER_ID, "42", "Bearer test-token"))
+        url = asyncio.run(service.create_disposal_report(USER_ID, "42", BEARER))
 
-        service.report_node.assert_awaited_once()
         state = service.report_node.await_args.args[0]
         assert "42" in state["current_request"]
         assert state["unit_id"] == str(UNIT_ID)
@@ -249,157 +287,115 @@ class TestDisposalReport:
         assert upload_kwargs["filename"] == "disposal-42.pdf"
         assert upload_kwargs["content"] == b"%PDF-1.7"
         saved = service.repository.save_disposal_report.call_args.args[0]
-        assert saved.disposal_id == "42"
-        assert saved.user_id == USER_ID
-        assert saved.report_url == "https://storage/disposal-42.pdf"
+        assert (saved.disposal_id, saved.user_id, saved.unit_id, saved.report_url) == ("42", USER_ID, UNIT_ID, url)
         assert url == "https://storage/disposal-42.pdf"
 
     def test_returns_the_stored_url_without_generating_again(self, service):
-        existing = MagicMock(report_url="https://storage/already.pdf")
-        service.repository.get_disposal_report.return_value = existing
+        service.repository.get_disposal_report.return_value = _stored_report(unit_id=UNIT_ID)
         service.report_node = AsyncMock()
 
-        url = asyncio.run(service.create_disposal_report(USER_ID, "42", "Bearer test-token"))
+        url = asyncio.run(service.create_disposal_report(USER_ID, "42", BEARER))
 
         assert url == "https://storage/already.pdf"
         service.report_node.assert_not_awaited()
         service.storage_service.upload.assert_not_called()
-        service.repository.save_disposal_report.assert_not_called()
 
-    def test_reads_the_stored_url(self, service):
-        service.repository.get_disposal_report.return_value = MagicMock(report_url="https://storage/already.pdf")
-
-        assert service.get_disposal_report("42") == "https://storage/already.pdf"
-
-    def test_reads_none_when_the_disposal_has_no_report(self, service):
-        service.repository.get_disposal_report.return_value = None
-
-        assert service.get_disposal_report("42") is None
-
-    def test_refuses_when_the_user_unit_cannot_be_resolved(self, service):
-        service.repository.get_disposal_report.return_value = None
-        service.admin_core.get_unit_id = AsyncMock(return_value=None)
+    def test_refuses_another_units_stored_report(self, service):
+        service.repository.get_disposal_report.return_value = _stored_report(unit_id=OTHER_UNIT_ID)
         service.report_node = AsyncMock()
 
         with pytest.raises(UnitMismatchException):
-            asyncio.run(service.create_disposal_report(USER_ID, "42", "Bearer test-token"))
+            asyncio.run(service.create_disposal_report(USER_ID, "42", BEARER))
+
+        service.report_node.assert_not_awaited()
+
+    def test_refuses_when_the_user_unit_cannot_be_resolved(self, service, unit_resolver):
+        service.repository.get_disposal_report.return_value = None
+        unit_resolver.get_unit_id = AsyncMock(return_value=None)
+        service.report_node = AsyncMock()
+
+        with pytest.raises(UnitMismatchException):
+            asyncio.run(service.create_disposal_report(USER_ID, "42", BEARER))
 
         service.report_node.assert_not_called()
 
+    def test_reads_only_the_units_own_report(self, service):
+        service.repository.get_disposal_report.return_value = _stored_report(unit_id=UNIT_ID)
+        assert asyncio.run(service.get_disposal_report(USER_ID, "42", BEARER)) == "https://storage/already.pdf"
+
+        service.repository.get_disposal_report.return_value = _stored_report(unit_id=OTHER_UNIT_ID)
+        assert asyncio.run(service.get_disposal_report(USER_ID, "42", BEARER)) is None
+
+        service.repository.get_disposal_report.return_value = None
+        assert asyncio.run(service.get_disposal_report(USER_ID, "42", BEARER)) is None
+
+    def test_a_report_stored_without_unit_is_only_for_whoever_generated_it(self, service):
+        service.repository.get_disposal_report.return_value = _stored_report(unit_id=None)
+        assert asyncio.run(service.get_disposal_report(USER_ID, "42", BEARER)) == "https://storage/already.pdf"
+
+        someone_else = UUID("55555555-5555-5555-5555-555555555555")
+        assert asyncio.run(service.get_disposal_report(someone_else, "42", BEARER)) is None
+
+
+def _stored_report(unit_id: UUID | None) -> DisposalReport:
+    return DisposalReport(
+        disposal_id="42",
+        user_id=USER_ID,
+        unit_id=unit_id,
+        report_url="https://storage/already.pdf",
+        created_at=datetime.now(timezone.utc),
+    )
+
+
+class TestConversations:
+    def test_delegates_to_the_repository(self, service):
+        service.list_conversations(USER_ID, 2, 10)
+        service.repository.list_conversations.assert_called_once_with(USER_ID, 2, 10)
+
+        service.get_conversation(USER_ID, THREAD_ID)
+        service.repository.retrieve_messages.assert_called_once_with(USER_ID, THREAD_ID, limit=None)
+
 
 class TestSetup:
-    @patch("multi_agent.service.MultiServerMCPClient")
-    @patch("multi_agent.service.FAQ")
-    @patch("multi_agent.service.StateGraph")
-    @patch("multi_agent.service.AsyncRedisSaver")
     @patch("multi_agent.service.create_agent")
-    @patch("multi_agent.service.ChatGroq")
-    @patch("multi_agent.service.ChatGoogleGenerativeAI")
-    def test_builds_the_guardrail_and_compiles_the_graph_once(
-        self, mock_llm, mock_groq_llm, mock_create_agent, mock_redis_saver, mock_state_graph, mock_faq, mock_mcp_client, service
-    ):
+    def test_builds_every_agent_over_the_injected_adapters_and_compiles_once(self, mock_create_agent, service):
         mock_create_agent.side_effect = lambda **kwargs: MagicMock()
-        mock_graph = mock_state_graph.return_value
-        mock_graph.compile.return_value = MagicMock()
-
-        predict_batch_tool = MagicMock(name="predict_time_to_failure_batch")
-        predict_batch_tool.name = "predict_time_to_failure_batch"
-        categories_tool = MagicMock(name="list_valid_categories")
-        categories_tool.name = "list_valid_categories"
-        categories_tool.ainvoke = AsyncMock(return_value=["notebook"])
-        climate_zones_tool = MagicMock(name="list_valid_climate_zones")
-        climate_zones_tool.name = "list_valid_climate_zones"
-        climate_zones_tool.ainvoke = AsyncMock(return_value=["TROPICAL"])
-        disposal_report_tool = MagicMock(name="get_disposal_report")
-        disposal_report_tool.name = "get_disposal_report"
-        search_tool = MagicMock(name="search_inventory")
-        search_tool.name = "search_inventory"
-        inventory_tools = [search_tool, disposal_report_tool]
-        mock_mcp_client.return_value.get_tools = AsyncMock(
-            side_effect=[
-                [predict_batch_tool, categories_tool, climate_zones_tool],
-                inventory_tools,
-            ]
-        )
+        report_tool = MagicMock()
+        report_tool.name = "get_disposal_report"
+        service.inventory_tools = [report_tool]
+        service.checkpointer = InMemorySaver()
 
         service.setup()
 
-        assert mock_llm.called
         assert mock_create_agent.call_count == 10  # 9 graph agents + preferences_agent
-        mock_mcp_client.assert_any_call(
-            {
-                "predict_model": {
-                    "url": service.envs.PREDICT_MODEL_MCP_URL,
-                    "transport": "streamable_http",
-                    "headers": {"apikey": service.envs.PREDICT_MODEL_API_KEY},
-                }
-            }
-        )
-        mock_mcp_client.assert_any_call(
-            {
-                "ms_inventory": {
-                    "url": service.envs.MS_INVENTORY_MCP_URL,
-                    "transport": "streamable_http",
-                    "headers": {"apikey": service.envs.MS_INVENTORY_API_KEY},
-                }
-            }
-        )
-        assert service.guardrail is not None
-        assert service.preferences_agent is not None
-        assert service.graph is mock_graph
-        assert service.compiled_graph is mock_graph.compile.return_value
-        mock_redis_saver.assert_called_once_with(redis_url=service.envs.REDIS_URL)
-        mock_redis_saver.return_value.setup.assert_called_once_with()
-        assert service.checkpointer is mock_redis_saver.return_value
-        mock_graph.compile.assert_called_once_with(checkpointer=service.checkpointer)
+        assert service.compiled_graph is not None
         report_agent_call = next(
             call for call in mock_create_agent.call_args_list
             if call.kwargs.get("system_prompt") is REPORT_AGENT_SYSTEM_PROMPT_FINAL
         )
-        assert report_agent_call.kwargs["tools"] == inventory_tools
+        assert report_agent_call.kwargs["tools"] == [report_tool]
+        assert report_agent_call.kwargs["model"] is service.llm_fast
 
 
-class TestFetchPredictModelTools:
-    @patch("multi_agent.service.MultiServerMCPClient")
-    def test_fetches_tools_from_the_predict_model_mcp_server(self, mock_mcp_client, service):
-        tools = [MagicMock(name="predict_time_to_failure")]
-        mock_mcp_client.return_value.get_tools = AsyncMock(return_value=tools)
-        service.envs.PREDICT_MODEL_MCP_URL = "https://gateway.zera.internal/predictor"
-        service.envs.PREDICT_MODEL_API_KEY = "predict-key"
-
-        result = asyncio.run(service._fetch_predict_model_tools())
-
-        mock_mcp_client.assert_called_once_with(
-            {
-                "predict_model": {
-                    "url": "https://gateway.zera.internal/predictor",
-                    "transport": "streamable_http",
-                    "headers": {"apikey": "predict-key"},
-                }
-            }
-        )
-        assert result == tools
+class TestMessageToBaseMessage:
+    @pytest.mark.parametrize("role,expected", [
+        (Role.USER, HumanMessage), (Role.ASSISTANT, AIMessage), (Role.SYSTEM, SystemMessage),
+    ])
+    def test_maps_each_role(self, role, expected):
+        message = Message(user_id=USER_ID, thread_id=THREAD_ID, role=role, content="oi", created_at=datetime.now(timezone.utc))
+        assert isinstance(message_to_base_message(message), expected)
 
 
-class TestFetchPredictModelContext:
-    @patch("multi_agent.service.MultiServerMCPClient")
-    def test_separates_the_batch_tool_from_the_vocabulary_tools(self, mock_mcp_client, service):
-        predict_batch_tool = MagicMock(name="predict_time_to_failure_batch")
-        predict_batch_tool.name = "predict_time_to_failure_batch"
-        categories_tool = MagicMock(name="list_valid_categories")
-        categories_tool.name = "list_valid_categories"
-        categories_tool.ainvoke = AsyncMock(return_value=["notebook", "celular"])
-        climate_zones_tool = MagicMock(name="list_valid_climate_zones")
-        climate_zones_tool.name = "list_valid_climate_zones"
-        climate_zones_tool.ainvoke = AsyncMock(return_value=["TROPICAL", "ARID"])
-        mock_mcp_client.return_value.get_tools = AsyncMock(
-            return_value=[predict_batch_tool, categories_tool, climate_zones_tool]
-        )
+class TestRenderPreferences:
+    def test_renders_every_known_field(self):
+        text = render_preferences(UserPreferences(
+            user_id=USER_ID,
+            writing_style="Informal",
+            company_context="TI",
+            frequent_requests=["relatório mensal"],
+            updated_at=datetime.now(timezone.utc),
+        ))
+        assert "Informal" in text and "TI" in text and "relatório mensal" in text
 
-        predict_time_to_failure_batch, categories, climate_zones = asyncio.run(
-            service._fetch_predict_model_context()
-        )
-
-        assert predict_time_to_failure_batch is predict_batch_tool
-        assert categories == ["notebook", "celular"]
-        assert climate_zones == ["TROPICAL", "ARID"]
+    def test_omits_unset_fields(self):
+        assert render_preferences(UserPreferences(user_id=USER_ID, updated_at=datetime.now(timezone.utc))) == ""

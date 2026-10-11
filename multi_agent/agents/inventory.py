@@ -30,7 +30,7 @@ def make_inventory_func(inventory_agent: CompiledStateGraph) -> GraphNodeFunc:
         _logger.Info("Inventory agent invoked")
 
         _logger.Debug(f"Inventory raw response={response['messages'][-1].content}")
-        classification = parse_json_message(response["messages"][-1].content)
+        classification = parse_json_message(response["messages"][-1].content, "answer")
         _logger.Debug(f"Inventory classification={classification}")
 
         result: dict[str, Any] = {

@@ -1,16 +1,15 @@
 import asyncio
 import json
+from typing import cast
 from unittest.mock import AsyncMock, MagicMock
-from uuid import UUID
 
 import pytest
-from langchain.messages import HumanMessage
+from langchain.messages import HumanMessage, RemoveMessage
+from langchain_core.messages import BaseMessage
+from langgraph.graph.message import add_messages
 
 from multi_agent.entity import AgentName
 from multi_agent.agents.guardrail import Guardrail
-
-USER_ID = UUID("11111111-1111-1111-1111-111111111111")
-THREAD_ID = UUID("22222222-2222-2222-2222-222222222222")
 
 
 @pytest.fixture
@@ -18,12 +17,8 @@ def guardrail():
     return Guardrail(
         guardrail_in_agent=MagicMock(),
         guardrail_out_agent=MagicMock(),
-        repository=MagicMock(),
         logger=MagicMock(),
     )
-
-
-CONFIG = {"configurable": {"user_id": USER_ID, "thread_id": THREAD_ID}}
 
 
 class TestRemovePiiFromText:
@@ -96,12 +91,13 @@ class TestGuardrailInFunc:
             ]
         })
 
-        result = asyncio.run(guardrail.guardrail_in_func({"messages": [original_message]}, CONFIG))
+        result = asyncio.run(guardrail.guardrail_in_func({"messages": [original_message]}))
 
         assert result["blocked"] is True
         assert result["blocked_reason"] == "PII detectado"
-        assert len(result["messages"]) == 2
-        assert result["messages"][0].id == original_message.id
+        # the blocked message leaves the history instead of being fed back on later turns
+        assert add_messages([original_message], result["messages"]) == []
+        assert isinstance(result["messages"][0], RemoveMessage)
 
     def test_masks_pii_before_calling_the_agent(self, guardrail):
         original_message = HumanMessage(content="contato joao@example.com", id="msg-2")
@@ -109,27 +105,24 @@ class TestGuardrailInFunc:
             "messages": [MagicMock(content=json.dumps({"blocked": False, "blocked_reason": None}))]
         })
 
-        result = asyncio.run(guardrail.guardrail_in_func({"messages": [original_message]}, CONFIG))
+        result = asyncio.run(guardrail.guardrail_in_func({"messages": [original_message]}))
 
         invoked_message = guardrail.guardrail_in_agent.ainvoke.call_args[0][0]["messages"][0]
         assert "joao@example.com" not in invoked_message.content
         assert result["pii_map"]["<EMAIL_0>"] == "joao@example.com"
 
-    def test_saves_the_masked_message_after_classification_succeeds(self, guardrail):
+    def test_replaces_the_original_in_place_with_the_masked_text(self, guardrail):
+        earlier = HumanMessage(content="oi", id="msg-0")
         original_message = HumanMessage(content="contato joao@example.com", id="msg-3")
         guardrail.guardrail_in_agent.ainvoke = AsyncMock(return_value={
             "messages": [MagicMock(content=json.dumps({"blocked": False, "blocked_reason": None}))]
         })
 
-        asyncio.run(guardrail.guardrail_in_func({"messages": [original_message]}, CONFIG))
+        result = asyncio.run(guardrail.guardrail_in_func({"messages": [earlier, original_message]}))
 
-        guardrail.repository.save_message.assert_called_once()
-        saved_message = guardrail.repository.save_message.call_args[0][0]
-        assert saved_message.role == "user"
-        assert saved_message.agent == AgentName.GUARDRAIL_IN
-        assert "joao@example.com" not in saved_message.content
-        assert saved_message.user_id == USER_ID
-        assert saved_message.thread_id == THREAD_ID
+        history = cast(list[BaseMessage], add_messages([earlier, original_message], result["messages"]))
+        assert [m.id for m in history] == ["msg-0", "msg-3"]
+        assert history[1].content == "contato <EMAIL_0>"
 
 
 class TestGuardrailOutFunc:
@@ -169,8 +162,8 @@ class TestPiiMapIsRequestScoped:
             "messages": [MagicMock(content=json.dumps({"blocked": False, "blocked_reason": None}))]
         })
 
-        result_a = asyncio.run(guardrail.guardrail_in_func({"messages": [message_a]}, CONFIG))
-        result_b = asyncio.run(guardrail.guardrail_in_func({"messages": [message_b]}, CONFIG))
+        result_a = asyncio.run(guardrail.guardrail_in_func({"messages": [message_a]}))
+        result_b = asyncio.run(guardrail.guardrail_in_func({"messages": [message_b]}))
 
         guardrail.guardrail_out_agent.ainvoke = AsyncMock(return_value={
             "messages": [MagicMock(content=json.dumps({"blocked": False, "blocked_reason": None}))]

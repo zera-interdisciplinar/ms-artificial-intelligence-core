@@ -7,10 +7,13 @@ the plain text so callers can safely json.loads() it regardless of provider.
 """
 
 import json
+from collections.abc import Sequence
 import re
 from typing import Any
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
+
+from ..exception import AgentOutputException
 
 _CODE_FENCE_RE = re.compile(r"^```(?:json)?\s*|\s*```$", re.MULTILINE)
 
@@ -31,11 +34,20 @@ def extract_text(content: Any) -> str:
     return str(content)
 
 
-def parse_json_message(content: Any) -> Any:
-    """Extracts plain text from message content and parses it as JSON."""
+def parse_json_message(content: Any, *required_keys: str) -> Any:
+    """Extracts plain text from message content and parses it as JSON.
+    Raises AgentOutputException when it is not JSON or misses a required key."""
 
     text = _CODE_FENCE_RE.sub("", extract_text(content)).strip()
-    return json.loads(text)
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError as e:
+        raise AgentOutputException(f"agent output is not JSON: {text[:200]!r}") from e
+
+    missing = [key for key in required_keys if not isinstance(data, dict) or key not in data]
+    if missing:
+        raise AgentOutputException(f"agent output is missing {missing}: {text[:200]!r}")
+    return data
 
 
 def with_preferences(text: str, preferences: str | None) -> str:
@@ -48,7 +60,7 @@ def with_preferences(text: str, preferences: str | None) -> str:
     return f"[Preferências de longo prazo do usuário: {preferences}]\n\n{text}"
 
 
-def render_history(messages: list[BaseMessage]) -> str:
+def render_history(messages: Sequence[BaseMessage]) -> str:
     """Renders every Human/AI turn as plain-text lines."""
 
     turns = [
@@ -61,7 +73,7 @@ def render_history(messages: list[BaseMessage]) -> str:
 
 def request_with_history(
     current_request: str,
-    messages: list[BaseMessage] | None,
+    messages: Sequence[BaseMessage] | None,
     preferences: str | None = None,
 ) -> str:
     """Prefixes the current request with every prior turn in the graph state.

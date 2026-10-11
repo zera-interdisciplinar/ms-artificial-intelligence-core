@@ -1,25 +1,16 @@
 """
-Define the interface for multi-agent contracts and repository (interface).
+Ports of the multi-agent core. The core depends only on these; adapters
+(_internal/*, repository/*) implement them and app/api/composition.py wires them.
 """
 
-from typing import Optional, Protocol, runtime_checkable
-from .entity import ConversationPage, DisposalReport, Message, AgentResponse, State, UserPreferences
+from typing import Protocol, runtime_checkable
+from .entity import ConversationPage, DisposalReport, Message, AgentResponse, UserPreferences
 from uuid import UUID
 
-from langgraph.graph import StateGraph
-
-from _internal.mongo.setup import Repository
 
 @runtime_checkable
 class IMultiAgentRepository(Protocol):
     """Interface for the multi-agent repository."""
-
-    def setup(self, repository: Repository) -> None:
-        """
-        Setup the AgentRepository, connecting to the database, setting up the collections, etc.
-        Raise RepositoryException if the setup fails.
-        """
-        ...
 
     def save_message(
         self, 
@@ -72,7 +63,8 @@ class IMultiAgentRepository(Protocol):
 
     def save_disposal_report(self, report: DisposalReport) -> None:
         """
-        Save the stored PDF of one disposal.
+        Save the stored PDF of one disposal. The first report saved for a disposal
+        wins: a concurrent second save is a no-op, never an overwrite.
         Raise RepositorySaveException if the save fails.
         """
         ...
@@ -85,46 +77,70 @@ class IMultiAgentRepository(Protocol):
         ...
 
 
+class IUnitResolver(Protocol):
+    """ms-administrative-core, the authority on which unit a user belongs to."""
+
+    async def get_unit_id(self, user_id: UUID, authorization: str) -> UUID | None:
+        """The user's unit, or None when the user cannot be resolved."""
+        ...
+
+
+class IStorageService(Protocol):
+    """Persists file bytes to a storage provider and returns a public/shareable URL."""
+
+    def upload(self, content: bytes, filename: str, content_type: str) -> str:
+        """Upload the content and return the URL where it can be accessed."""
+        ...
+
+
+class IPdfRenderer(Protocol):
+    """Renders HTML into PDF bytes."""
+
+    def render(self, html: str) -> bytes:
+        ...
+
+
 @runtime_checkable
 class IMultiAgentService(Protocol):
     """Interface for the multi-agent service."""
 
-    repository: IMultiAgentRepository
-    graph: Optional[StateGraph[State]]
-
     def setup(self) -> None:
         """
-        Setup the multi-agent service, initializing any necessary components.
+        Build the agents and compile the langgraph graph.
         Raise MultiAgentServiceException if the setup fails.
-
-        this setup also creates the langgraph graph and the langgraph agent, which are used to process messages and generate responses.
         """
         ...
 
     async def process_message(
-        self, message: str, user_id: UUID, thread_id: UUID, unit_id: UUID, authorization: str
+        self, message: str, user_id: UUID, thread_id: UUID, unit_id: UUID | None, authorization: str
     ) -> AgentResponse:
         """
         Process a message and return the response from the multi-agent system.
-        unit_id is the unit the caller claims the user belongs to; it is validated
-        against ms-administrative-core before anything else runs. authorization is
-        the caller's Authorization header, forwarded as-is to ms-administrative-core --
-        this service never authenticates on the caller's behalf.
-        Raise MultiAgentServiceException if the processing fails.
-        Raise UnitMismatchException if unit_id is not the user's unit.
+        unit_id is the unit the caller claims the user belongs to, validated against
+        ms-administrative-core before anything else runs; None means "use the user's
+        unit" (callers that only know who the user is, like the MCP facade).
+        authorization is forwarded as-is to ms-administrative-core.
+        Raise UnitMismatchException if the unit is not the user's or cannot be resolved.
         """
         ...
 
     async def create_disposal_report(self, user_id: UUID, disposal_id: str, authorization: str) -> str:
         """
         Generate and store the PDF for one disposal, or return the URL already stored.
-        authorization is the caller's Authorization header, forwarded to resolve the
-        user's unit before get_disposal_report runs.
-        Raise MultiAgentServiceException if generation or upload fails.
-        Raise UnitMismatchException if the user's unit cannot be resolved.
+        Raise UnitMismatchException if the user's unit cannot be resolved or the
+        stored report belongs to another unit.
         """
         ...
 
-    def get_disposal_report(self, disposal_id: str) -> str | None:
-        """The stored PDF URL for this disposal, or None if it was never generated."""
+    async def get_disposal_report(self, user_id: UUID, disposal_id: str, authorization: str) -> str | None:
+        """The stored PDF URL for this disposal, or None if it was never generated or is another unit's.
+        Raise UnitMismatchException if the user's unit cannot be resolved."""
+        ...
+
+    def list_conversations(self, user_id: UUID, page: int, page_size: int) -> ConversationPage:
+        """One page of the user's conversations, most recently active first."""
+        ...
+
+    def get_conversation(self, user_id: UUID, thread_id: UUID) -> list[Message]:
+        """Every message of the thread, oldest first, scoped to the user."""
         ...

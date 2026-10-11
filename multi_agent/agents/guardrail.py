@@ -5,13 +5,8 @@ from langgraph.graph.state import CompiledStateGraph
 from ..entity import State, AgentName
 from .message_utils import parse_json_message
 from langchain.messages import HumanMessage, RemoveMessage
-from langchain_core.runnables import RunnableConfig
 import json
 import re
-from datetime import datetime, timezone
-
-from multi_agent.entity import Message, Role
-from multi_agent.multi_agent import IMultiAgentRepository
 
 from logger.logger import Logger
 
@@ -49,25 +44,22 @@ class Guardrail:
 
         guardrail_in_agent: CompiledStateGraph
         guardrail_out_agent: CompiledStateGraph
-        repository: IMultiAgentRepository
         logger: Logger
 
         def __init__(
             self,
             guardrail_in_agent: CompiledStateGraph,
             guardrail_out_agent: CompiledStateGraph,
-            repository: IMultiAgentRepository,
             logger: Logger,
         ) -> None:
                 self.guardrail_in_agent = guardrail_in_agent
                 self.guardrail_out_agent = guardrail_out_agent
-                self.repository = repository
                 self.logger = logger
 
         # ==============================================
         # GUARDRAIL IN FUNCTIONS
         # ==============================================
-        async def guardrail_in_func(self, state: State, config: RunnableConfig) -> dict[str, Any]:
+        async def guardrail_in_func(self, state: State) -> dict[str, Any]:
                 """
                 Function to handle the guardrail_in state. It works in this pipe: anonimize the user input + make the PII map -> use llm to classify the user input as safe or unsafe -> if unsafe, block the user input and return the reason, otherwise, return the user input to the orchestrator.
                 """
@@ -87,7 +79,8 @@ class Guardrail:
                 self.logger.Info(f"Guardrail in: detected {len(pii_map)} PII items")
                 self.logger.Debug(f"Guardrail in: pii_map={json.dumps(pii_map)}")
 
-                masked_message = HumanMessage(content=anonimized_input)
+                # same id: add_messages replaces the original in place, so the raw text never stays in the checkpoint
+                masked_message = HumanMessage(content=anonimized_input, id=original_message_id)
 
                 # call the guardrail_in_agent to classify the user input as safe or unsafe
                 self.logger.Info("Guardrail in: invoking guardrail_in_agent for classification")
@@ -97,28 +90,14 @@ class Guardrail:
 
                 self.logger.Info(f"Guardrail In Response: {guardrail_in_response['messages'][-1].content}")
 
-                classification = parse_json_message(guardrail_in_response["messages"][-1].content)
+                classification = parse_json_message(guardrail_in_response["messages"][-1].content, "blocked", "blocked_reason")
 
-                configurable: dict[str, Any] = config.get("configurable") or {}
-
-                # saves the message only if it is not blocked, otherwise, it will be blocked and not saved in the database.
-                if not classification["blocked"]:
-                    self.logger.Info("Guardrail in: message not blocked, saving to repository")
-                    self.repository.save_message(
-                        Message(
-                            user_id=configurable["user_id"],
-                            thread_id=configurable["thread_id"],
-                            role=Role.USER,
-                            content=anonimized_input,
-                            agent=AgentName.GUARDRAIL_IN,
-                            created_at=datetime.now(timezone.utc),
-                        )
-                    )
-                else:
+                if classification["blocked"]:
                     self.logger.Warning(f"Guardrail in: message blocked for reason: {classification.get('blocked_reason')}")
 
                 return {
-                    "messages": [RemoveMessage(id=original_message_id), masked_message],
+                    # a blocked message leaves the history, so later turns never feed it back to the agents
+                    "messages": [RemoveMessage(id=original_message_id) if classification["blocked"] else masked_message],
                     "called_agents": [AgentName.GUARDRAIL_IN],
                     "blocked": classification["blocked"],
                     "blocked_reason": classification["blocked_reason"],
@@ -169,7 +148,7 @@ class Guardrail:
                 )
 
                 self.logger.Debug(f"Guardrail out raw response={guardrail_out_response['messages'][-1].content}")
-                classification = parse_json_message(guardrail_out_response["messages"][-1].content)
+                classification = parse_json_message(guardrail_out_response["messages"][-1].content, "blocked", "blocked_reason")
                 self.logger.Debug(f"Guardrail out: classification={json.dumps(classification)}")
 
                 if classification["blocked"]:

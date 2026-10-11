@@ -9,25 +9,26 @@ responsibility: the JWT that authorizes the call is the one the original
 caller sent us (Authorization header), and we just forward it.
 """
 
-import time
 from uuid import UUID
 
 import httpx
+from redis.asyncio import Redis
 
 from config.environments import Environments
 from logger.logger import Logger
 
 _CACHE_TTL_SECONDS = 360
+_CACHE_KEY_PREFIX = "admin_core:unit"
 _TIMEOUT_SECONDS = 5.0
 
 
 class AdminCoreClient:
     """Resolves a user's unitId against ms-administrative-core"""
 
-    def __init__(self, envs: Environments, logger: Logger) -> None:
+    def __init__(self, envs: Environments, logger: Logger, store: Redis) -> None:
         self.envs = envs
         self.logger = logger
-        self._cache: dict[UUID, tuple[UUID, float]] = {}
+        self.store = store
 
     async def get_unit_id(self, user_id: UUID, authorization: str) -> UUID | None:
         """Returns the unit the user belongs to, or None when it cannot be resolved.
@@ -37,12 +38,11 @@ class AdminCoreClient:
         caller (e.g. "Bearer <jwt>"), forwarded as-is to ms-administrative-core.
         """
 
-        cached = self._cache.get(user_id)
-        if cached is not None and time.monotonic() - cached[1] < _CACHE_TTL_SECONDS:
-            # in this case, we update the timestamp to extend the cache lifetime, but we don't need to re-fetch
-            self._cache[user_id] = (cached[0], time.monotonic())
-
-            return cached[0]
+        # fixed TTL (not refreshed on hit), so a user moved to another unit is picked up within it
+        cache_key = f"{_CACHE_KEY_PREFIX}:{user_id}"
+        cached = await self.store.get(cache_key)
+        if cached is not None:
+            return UUID(cached.decode() if isinstance(cached, bytes) else cached)
 
         assert self.envs.ADMIN_CORE_URL is not None, "ADMIN_CORE_URL must be set to resolve the user's unit"
 
@@ -72,7 +72,7 @@ class AdminCoreClient:
             return None
 
         unit_id = UUID(str(raw_unit_id))
-        self._cache[user_id] = (unit_id, time.monotonic())
+        await self.store.set(cache_key, str(unit_id), ex=_CACHE_TTL_SECONDS)
         return unit_id
 
     async def login(self, email: str, password: str) -> dict | None:

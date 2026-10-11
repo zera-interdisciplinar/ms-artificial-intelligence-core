@@ -5,6 +5,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from multi_agent.exception import AgentOutputException
+
 from langchain.messages import HumanMessage
 
 from multi_agent.entity import AgentName, State
@@ -81,7 +83,7 @@ class TestInventoryFunc:
         })
         inventory_func = make_inventory_func(inventory_agent)
 
-        with pytest.raises(json.JSONDecodeError):
+        with pytest.raises(AgentOutputException):
             asyncio.run(inventory_func(cast(State, {"current_request": "status do notebook NB-4521"})))
 
 

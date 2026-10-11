@@ -1,6 +1,6 @@
 """
 ACL for the external MCP facade.
-The method does not know about tools. It receives an already resolved caller
+The method does not know about tools. It receives an already identified caller
 and runs the same graph the app uses.
 
 
@@ -18,9 +18,9 @@ async def acl_process_message(
     content: str,
     thread_id: UUID,
     user_id: UUID,
-    unit_id: UUID,
     authorization: str,
 ) -> AgentResponse:
-    """Call process_message. Identity is already decided by the adapter."""
+    """Call process_message. The facade only knows the user; the unit is the one
+    ms-administrative-core has for them (unit_id=None)."""
 
-    return await service.process_message(content, user_id, thread_id, unit_id, authorization)
+    return await service.process_message(content, user_id, thread_id, None, authorization)

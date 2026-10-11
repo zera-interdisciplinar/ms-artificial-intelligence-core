@@ -67,7 +67,6 @@ jobs:
       SELF_MCP_URL: http://127.0.0.1:8000
       ADMIN_CORE_SERVICE_EMAIL: ${{ secrets.ADMIN_CORE_SERVICE_EMAIL }} # this will be used only in case of integration tests
       ADMIN_CORE_SERVICE_PASSWORD: ${{ secrets.ADMIN_CORE_SERVICE_PASSWORD }} # this will be used only in case of integration tests
-      INTEGRATION_USER_ID: ${{ secrets.INTEGRATION_USER_ID }} # this will be used only in case of integration tests
       INTEGRATION_UNIT_ID: ${{ secrets.INTEGRATION_UNIT_ID }} # this will be used only in case of integration tests
 
     steps:

@@ -134,7 +134,7 @@ Assistente: {"predictions": [{"item": "Monitor Samsung", "estimated_remaining_mo
 def build_predict_model_system_prompt(categories: list[str], climate_zones: list[str]) -> str:
     """Assembles the predict_model system prompt with the category/climateZone
     domains fetched at boot from the predict_model MCP server (see
-    MultiAgentService._fetch_predict_model_context)."""
+    _internal/mcp/clients.fetch_predict_model_context)."""
 
     return f"""{GENERAL_SYSTEM_PROMPT}
 

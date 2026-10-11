@@ -18,6 +18,7 @@ Tests usecases:
 """
 
 import os
+from collections.abc import Iterator
 from datetime import datetime, timezone
 from uuid import uuid4
 
@@ -33,7 +34,6 @@ from _internal.api.dto import DisposalReportRequest, ProcessMessageRequest
 
 pytestmark = pytest.mark.integration
 
-INTEGRATION_USER_ID = os.getenv("INTEGRATION_USER_ID", "")
 INTEGRATION_UNIT_ID = os.getenv("INTEGRATION_UNIT_ID", "")
 
 _ADMIN_CORE_URL = os.getenv("ADMIN_CORE_URL", "").strip()
@@ -92,19 +92,20 @@ def called_inventory_flow(response: AgentResponse) -> bool:
 
 
 @pytest.fixture()
-def client() -> TestClient:
+def client() -> Iterator[TestClient]:
     """
     Fixture that provides a TestClient instance for testing the FastAPI application.
+    Opened with `with` so every request shares one event loop, like uvicorn: the async
+    Redis pool keeps its connections bound to the loop that opened them.
     """
+    from redis.asyncio import Redis
+
     from _internal.api.router import RouterAPI
+    from app.api.composition import build_service
     from config.environments import Environments
     from logger.logger import Logger
-    from multi_agent.service import MultiAgentService
     from _internal.mongo.setup import Repository
     from repository.multi_agent import MultiAgentRepository
-    from _internal.storage.pdf import PdfRenderer
-    from _internal.storage.service import SupabaseStorageService
-    from _internal.admin_core.client import AdminCoreClient
 
     envs = Environments()
     
@@ -115,30 +116,19 @@ def client() -> TestClient:
     logger = Logger()
     router_api = RouterAPI(envs, logger)
     
-    general_repository = Repository(envs)
-    multi_agent_repository = MultiAgentRepository()
-    pdf_renderer = PdfRenderer()
-    storage_service = SupabaseStorageService(envs)
-    
     # clear the collection if exists
-    multi_agent_repository.setup(general_repository)
+    multi_agent_repository = MultiAgentRepository()
+    multi_agent_repository.setup(Repository(envs))
     multi_agent_repository.messageCollection.delete_many({})
     multi_agent_repository.preferencesCollection.delete_many({})
     
-    multi_agent_service = MultiAgentService(
-        repository=multi_agent_repository,
-        envs=envs,
-        logger=logger,
-        pdf_renderer=pdf_renderer,
-        storage_service=storage_service,
-        admin_core=AdminCoreClient(envs, logger),
-    )
+    redis = Redis.from_url(envs.REDIS_URL)
+    multi_agent_service, admin_core = build_service(envs, logger, redis)
     
-    multi_agent_service.setup()
+    router_api.BuildAPI(multi_agent_service, admin_core, redis)
     
-    router_api.BuildAPI(multi_agent_service)
-    
-    return TestClient(router_api._app)
+    with TestClient(router_api._app) as test_client:
+        yield test_client
 
 
 def test_health_endpoint(client: TestClient) -> None:
@@ -156,7 +146,6 @@ def test_faq_agent(client: TestClient, auth_headers: dict) -> None:
     user_message = "What is the project zera?"
 
     body: ProcessMessageRequest = ProcessMessageRequest(
-        user_id=INTEGRATION_USER_ID,
         thread_id=_new_UUID(),
         unit_id=INTEGRATION_UNIT_ID,
         content=user_message,
@@ -192,7 +181,6 @@ def test_predict_agent(client: TestClient, auth_headers: dict) -> None:
     )
 
     body: ProcessMessageRequest = ProcessMessageRequest(
-        user_id=INTEGRATION_USER_ID,
         thread_id=_new_UUID(),
         unit_id=INTEGRATION_UNIT_ID,
         content=user_message,
@@ -224,7 +212,6 @@ def test_report_agent(client: TestClient, auth_headers: dict) -> None:
     user_message = "Gere um relatório com o histórico de previsões de falha dos meus equipamentos."
 
     body: ProcessMessageRequest = ProcessMessageRequest(
-        user_id=INTEGRATION_USER_ID,
         thread_id=_new_UUID(),
         unit_id=INTEGRATION_UNIT_ID,
         content=user_message,
@@ -256,7 +243,7 @@ def test_disposal_report_returns_a_stored_url(client: TestClient, auth_headers: 
     A disposal report is generated outside the chat, stored, and readable by disposal id.
     """
     disposal_id = _new_UUID()
-    body = DisposalReportRequest(user_id=INTEGRATION_USER_ID, disposal_id=disposal_id)
+    body = DisposalReportRequest(disposal_id=disposal_id)
 
     created: Response = client.post(
         "/api/v1/reports", json=body.model_dump(mode="json"), headers=auth_headers
@@ -266,7 +253,7 @@ def test_disposal_report_returns_a_stored_url(client: TestClient, auth_headers: 
     report_url = created.json()["report_url"]
     assert report_url.startswith("http")
 
-    fetched: Response = client.get(f"/api/v1/reports/{disposal_id}")
+    fetched: Response = client.get(f"/api/v1/reports/{disposal_id}", headers=auth_headers)
 
     assert fetched.status_code == 200
     assert fetched.json()["report_url"] == report_url
@@ -278,7 +265,6 @@ def test_inventory_agent(client: TestClient, auth_headers: dict) -> None:
     user_message = "Qual o status atual do notebook de patrimônio NB-4521?"
 
     body: ProcessMessageRequest = ProcessMessageRequest(
-        user_id=INTEGRATION_USER_ID,
         thread_id=_new_UUID(),
         unit_id=INTEGRATION_UNIT_ID,
         content=user_message,
@@ -310,7 +296,6 @@ def test_off_topic_agent(client: TestClient, auth_headers: dict) -> None:
     user_message = "Qual a receita de um bolo de chocolate?"
 
     body: ProcessMessageRequest = ProcessMessageRequest(
-        user_id=INTEGRATION_USER_ID,
         thread_id=_new_UUID(),
         unit_id=INTEGRATION_UNIT_ID,
         content=user_message,
@@ -343,7 +328,6 @@ def test_rejects_a_unit_that_does_not_belong_to_the_user(client: TestClient, aut
     unit's inventory.
     """
     body: ProcessMessageRequest = ProcessMessageRequest(
-        user_id=INTEGRATION_USER_ID,
         thread_id=_new_UUID(),
         unit_id=_new_UUID(),
         content="Quantos itens existem no inventário?",
@@ -358,12 +342,14 @@ def test_rejects_a_unit_that_does_not_belong_to_the_user(client: TestClient, aut
     assert http_response.status_code == 403
 
 
-def test_lists_conversations_and_reads_every_message(client: TestClient) -> None:
+def test_lists_conversations_and_reads_every_message(client: TestClient, auth_headers: dict) -> None:
     """
     Threads saved in Mongo come back newest-first, one page at a time, with a
     40-character cut of the first message. The thread endpoint returns both sides.
+    The user is the one in the Bearer.
     """
     from config.environments import Environments
+    from _internal.mcp.auth import user_id_from_authorization
     from _internal.mongo.setup import Repository
     from repository.multi_agent import MultiAgentRepository
 
@@ -373,7 +359,7 @@ def test_lists_conversations_and_reads_every_message(client: TestClient) -> None
     repository = MultiAgentRepository()
     repository.setup(Repository(envs))
 
-    user_id = uuid4()
+    user_id = user_id_from_authorization(auth_headers["Authorization"])
     older_thread = uuid4()
     newer_thread = uuid4()
     opening = "primeira mensagem desta conversa antiga que passa de quarenta caracteres"
@@ -392,7 +378,8 @@ def test_lists_conversations_and_reads_every_message(client: TestClient) -> None
 
     first_page = client.get(
         "/api/v1/multi-agent/conversations",
-        params={"user_id": str(user_id), "page": 1, "page_size": 1},
+        params={"page": 1, "page_size": 1},
+        headers=auth_headers,
     )
     assert first_page.status_code == 200
     body = first_page.json()
@@ -403,7 +390,8 @@ def test_lists_conversations_and_reads_every_message(client: TestClient) -> None
 
     second_page = client.get(
         "/api/v1/multi-agent/conversations",
-        params={"user_id": str(user_id), "page": 2, "page_size": 1},
+        params={"page": 2, "page_size": 1},
+        headers=auth_headers,
     )
     assert second_page.status_code == 200
     older = second_page.json()["items"][0]
@@ -413,7 +401,7 @@ def test_lists_conversations_and_reads_every_message(client: TestClient) -> None
 
     history = client.get(
         f"/api/v1/multi-agent/conversations/{older_thread}",
-        params={"user_id": str(user_id)},
+        headers=auth_headers,
     )
     assert history.status_code == 200
     assert [(item["role"], item["content"]) for item in history.json()] == [

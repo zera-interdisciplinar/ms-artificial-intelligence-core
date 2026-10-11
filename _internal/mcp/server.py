@@ -16,15 +16,17 @@ from mcp.server.auth.settings import AuthSettings, ClientRegistrationOptions, Re
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
 from pydantic import AnyHttpUrl
+from redis.asyncio import Redis
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
 from _internal.admin_core.client import AdminCoreClient
 from _internal.mcp.acl import acl_process_message
-from _internal.mcp.auth import resolve_caller
+from _internal.mcp.auth import user_id_from_authorization
 from _internal.mcp.oauth import ZeraOAuthProvider, mount_login
 from config.environments import Environments
 from logger.logger import Logger
+from multi_agent.exception import UnitMismatchException
 from multi_agent.multi_agent import IMultiAgentService
 
 ASK_ZERA_DESCRIPTION = """Ask the Zera multi-agent assistant (guardrails + orchestrator + specialists).
@@ -54,31 +56,30 @@ def authorization_from_context(ctx: Context) -> str:
 
 async def ask_zera_impl(
     service: IMultiAgentService,
-    admin_core: AdminCoreClient,
     logger: Logger,
     authorization: str,
     content: str,
     thread_id: str | None,
 ) -> dict:
     """
-    Process message flow. Resolve who is calling, then hand the text to the ACL.
+    Process message flow. Read who is calling from the Bearer, then hand the text to
+    the ACL. The unit is resolved once, inside process_message, by ms-administrative-core.
     A missing thread id starts a new conversation.
     """
 
-    # resolve the caller and its unit id from the authorization token
     # a bad token or an unknown unit is a client rejection, same as the API's 403 log
     try:
-        user_id, unit_id = await resolve_caller(admin_core, authorization)
+        user_id = user_id_from_authorization(authorization)
+        # if no thread is provided, a new one is created
+        parsed_thread_id = UUID(thread_id) if thread_id else uuid4()
+        response = await acl_process_message(service, content, parsed_thread_id, user_id, authorization)
+    except UnitMismatchException as e:
+        logger.Warning(f"Rejected ask_zera caller: {e}")
+        raise ValueError("could not resolve unit") from e
     except ValueError as e:
         logger.Warning(f"Rejected ask_zera caller: {e}")
         raise
 
-    # if no thread is provided, a new one is created
-    parsed_thread_id = UUID(thread_id) if thread_id else uuid4()
-    
-    response = await acl_process_message(
-        service, content, parsed_thread_id, user_id, unit_id, authorization
-    )
     body = response.model_dump(mode="json")
     body["thread_id"] = str(parsed_thread_id)
     return body
@@ -89,6 +90,7 @@ def build_mcp(
     admin_core: AdminCoreClient,
     logger: Logger,
     envs: Environments,
+    oauth_store: Redis | None = None,
 ) -> FastMCP:
     """
     One tool. The host decides when to call it. Specialists stay inside the graph.
@@ -102,7 +104,8 @@ def build_mcp(
         issuer = AnyHttpUrl(issuer_url)
         # The tool lives at {issuer}/mcp. Claude looks up OAuth metadata on the host root.
         resource = AnyHttpUrl(issuer_url + "/mcp")
-        provider = ZeraOAuthProvider(admin_core, issuer_url, logger)
+        assert oauth_store is not None, "OAuth needs a shared store so connector logins survive restarts"
+        provider = ZeraOAuthProvider(admin_core, issuer_url, logger, oauth_store)
         auth = AuthSettings(
             issuer_url=issuer,
             resource_server_url=resource,
@@ -131,7 +134,7 @@ def build_mcp(
         except ValueError as e:
             logger.Warning(f"Rejected ask_zera caller: {e}")
             raise
-        return await ask_zera_impl(service, admin_core, logger, authorization, content, thread_id)
+        return await ask_zera_impl(service, logger, authorization, content, thread_id)
 
     return mcp
 

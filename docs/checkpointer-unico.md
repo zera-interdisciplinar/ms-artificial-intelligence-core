@@ -18,3 +18,6 @@ Será necessario criar tanto em compose, quanto nas pipelines de deploy, um novo
 
 A implementação deve ser feita usando TDD. Primeiro crie a interface e implemente testes para ele, certificando em não degradar nenhum fluxo.
 Além disso, implemente usando subagent-driven, coloque subagente para a implementação com todo o plano, e um em seguida para validar. Tenha nesse segundo subagente, instrução para validar se não tem: funções atoa, código morto implementado, complexidade desnecessária, etc.
+# atualização
+
+Implementado com `AsyncRedisSaver` (`multi_agent/async_redis_saver.py`), criado no composition root (`app/api/composition.py`) com o TTL nativo do `langgraph-checkpoint-redis` (`SESSION_TTL_SECONDS`, renovado a cada leitura). O `ThreadCache` em memória, que ainda decidia hidratação e limpeza por processo, foi removido: a hidratação acontece quando `aget_state` volta vazio, e a limpeza é o próprio TTL do Redis. Com isso, nada do estado de conversa impede mais de uma réplica. Ver decisão 7 em `docs/this-project-overview.md`.

@@ -93,6 +93,7 @@ class DisposalReport(BaseModel):
 
     disposal_id: str
     user_id: UUID
+    unit_id: UUID | None = None  # None only on reports stored before the unit was recorded
     report_url: str
     created_at: datetime
 
@@ -100,7 +101,7 @@ class DisposalReport(BaseModel):
 class UserPreferences(BaseModel):
     """Long-term, cross-conversation memory about a user: writing style, company
     context and recurring requests. Updated out-of-band (fire-and-forget)
-    when a thread's cache entry expires, over the whole conversation."""
+    when an expired thread is hydrated again, over its recent history."""
 
     user_id: UUID
     writing_style: str | None = None
