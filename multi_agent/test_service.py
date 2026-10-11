@@ -278,12 +278,12 @@ class TestSetup:
     @patch("multi_agent.service.MultiServerMCPClient")
     @patch("multi_agent.service.FAQ")
     @patch("multi_agent.service.StateGraph")
-    @patch("multi_agent.service.MemorySaver")
+    @patch("multi_agent.service.AsyncRedisSaver")
     @patch("multi_agent.service.create_agent")
     @patch("multi_agent.service.ChatGroq")
     @patch("multi_agent.service.ChatGoogleGenerativeAI")
     def test_builds_the_guardrail_and_compiles_the_graph_once(
-        self, mock_llm, mock_groq_llm, mock_create_agent, mock_memory_saver, mock_state_graph, mock_faq, mock_mcp_client, service
+        self, mock_llm, mock_groq_llm, mock_create_agent, mock_redis_saver, mock_state_graph, mock_faq, mock_mcp_client, service
     ):
         mock_create_agent.side_effect = lambda **kwargs: MagicMock()
         mock_graph = mock_state_graph.return_value
@@ -327,7 +327,10 @@ class TestSetup:
         assert service.preferences_agent is not None
         assert service.graph is mock_graph
         assert service.compiled_graph is mock_graph.compile.return_value
-        mock_graph.compile.assert_called_once()  # compiled once, shared by every thread
+        mock_redis_saver.assert_called_once_with(redis_url=service.envs.REDIS_URL)
+        mock_redis_saver.return_value.setup.assert_called_once_with()
+        assert service.checkpointer is mock_redis_saver.return_value
+        mock_graph.compile.assert_called_once_with(checkpointer=service.checkpointer)
 
 
 class TestFetchPredictModelTools:

@@ -51,6 +51,7 @@ jobs:
         run: |
           sed -i "s|IMAGE_TAG|${{ github.ref_name }}|g" k8s/deployment.yaml
           kubectl apply -f k8s/mongodb.yaml -n production
+          kubectl apply -f k8s/redis.yaml -n production
           kubectl apply -f k8s/deployment.yaml -n production
           kubectl apply -f k8s/service.yaml -n production
           kubectl apply -f k8s/ingress-mcp.yaml -n production
