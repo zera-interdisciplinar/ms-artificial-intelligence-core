@@ -45,7 +45,7 @@ def make_formatter_func(formatter_agent: CompiledStateGraph) -> GraphNodeFunc:
         _logger.Info("Formatter agent invoked")
 
         _logger.Debug(f"Formatter raw response={response['messages'][-1].content}")
-        formated_response = parse_json_message(response["messages"][-1].content)
+        formated_response = parse_json_message(response["messages"][-1].content, "formatted_response")
         _logger.Debug(f"Formatter formatted_response={formated_response}")
 
         return {

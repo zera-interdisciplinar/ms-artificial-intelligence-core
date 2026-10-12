@@ -2,9 +2,11 @@ import asyncio
 from typing import cast
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
 from langchain.messages import HumanMessage
 
 from multi_agent.entity import AgentName, State
+from multi_agent.exception import AgentOutputException
 from multi_agent.agents.orchestrator import (
     orchestrator_fate_decision,
     make_orchestrator_func,
@@ -37,6 +39,19 @@ class TestOrchestratorFunc:
         agent = MagicMock()
         agent.ainvoke = AsyncMock(return_value={"messages": [MagicMock(content=content)]})
         return agent
+
+    @pytest.mark.parametrize("content", [
+        '{"intent": "x", "next_agent": "nobody"}',
+        '{"intent": "x", "next_agent": "judge"}',
+        '{"intent": "x", "next_agent": "inventory_agent", "pending_agent": "report"}',
+        '{"intent": "unclassified", "next_agent": "__end__"}',
+    ], ids=["unknown agent", "agent without an edge", "pending without an edge", "end without suggestion"])
+    def test_a_route_the_graph_does_not_have_is_a_bad_agent_output(self, content):
+        orchestrator_func = make_orchestrator_func(self._make_agent(content))
+        state = cast(State, {"current_request": "oi", "messages": [HumanMessage(content="oi")]})
+
+        with pytest.raises(AgentOutputException):
+            asyncio.run(orchestrator_func(state))
 
     def test_sets_formatted_response_from_agent_suggestion_when_next_agent_is_end(self):
         # unclassified intent still routes through guardrail_out (see orchestrator_fate_decision /
@@ -78,6 +93,38 @@ class TestOrchestratorFunc:
         request_sent = agent.ainvoke.call_args[0][0]["messages"]
         assert "Histórico recente da conversa" in request_sent
         assert "lote 12" in request_sent
+
+    def test_carries_the_judge_rejection_to_routing_and_to_the_specialist(self):
+        agent = self._make_agent(
+            '{"intent": "faq", "next_agent": "%s", "resolved_request": "Quais perfis existem?"}'
+            % AgentName.FAQ_AGENT.value
+        )
+        state = cast(State, {
+            "current_request": "Quais perfis existem?",
+            "messages": [HumanMessage(content="Quais perfis existem?")],
+            "judge_attempts": 1,
+            "discrepancy": "response_omits_data",
+        })
+
+        result = asyncio.run(make_orchestrator_func(agent)(state))
+
+        assert "response_omits_data" in agent.ainvoke.call_args[0][0]["messages"]
+        assert "response_omits_data" in result["current_request"]
+
+    def test_first_attempt_has_no_rejection_note(self):
+        agent = self._make_agent(
+            '{"intent": "faq", "next_agent": "%s"}' % AgentName.FAQ_AGENT.value
+        )
+        state = cast(State, {
+            "current_request": "Quais perfis existem?",
+            "messages": [HumanMessage(content="Quais perfis existem?")],
+            "judge_attempts": 0,
+            "discrepancy": None,
+        })
+
+        result = asyncio.run(make_orchestrator_func(agent)(state))
+
+        assert result["current_request"] == "Quais perfis existem?"
 
     def test_sends_the_whole_message_history_not_only_the_last_six(self):
         agent = self._make_agent(

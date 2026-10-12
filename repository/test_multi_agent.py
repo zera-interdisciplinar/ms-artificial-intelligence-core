@@ -211,20 +211,25 @@ class TestPreferences:
 
 
 class TestDisposalReport:
-    def test_inserts_the_report_with_a_stringified_user_id(self, repo, user_id):
+    def test_inserts_the_report_with_stringified_ids(self, repo, user_id, thread_id):
         report = DisposalReport(
             disposal_id="42",
             user_id=user_id,
+            unit_id=thread_id,
             report_url="https://storage/disposal-42.pdf",
             created_at=datetime.now(timezone.utc),
         )
 
         repo.save_disposal_report(report)
 
-        document = repo.disposalReportCollection.insert_one.call_args.args[0]
-        assert document["disposal_id"] == "42"
+        filter_arg, update_arg = repo.disposalReportCollection.update_one.call_args.args
+        assert filter_arg == {"disposal_id": "42"}
+        # $setOnInsert: the first report saved wins, a concurrent second save never overwrites it
+        document = update_arg["$setOnInsert"]
         assert document["user_id"] == str(user_id)
+        assert document["unit_id"] == str(thread_id)
         assert document["report_url"] == "https://storage/disposal-42.pdf"
+        assert repo.disposalReportCollection.update_one.call_args.kwargs == {"upsert": True}
 
     def test_returns_the_stored_report(self, repo, user_id):
         created_at = datetime.now(timezone.utc)

@@ -4,6 +4,7 @@ from html import escape
 from typing import Any
 
 _FIELD_LIMIT = 400
+_SUMMARY_LIMIT = 1800
 
 
 def _text(value: Any, limit: int = _FIELD_LIMIT) -> str:
@@ -18,6 +19,27 @@ def _text(value: Any, limit: int = _FIELD_LIMIT) -> str:
     if len(collapsed) > limit:
         collapsed = collapsed[: limit - 1].rstrip() + "…"
     return escape(collapsed)
+
+
+def _paragraphs(value: Any, limit: int = _SUMMARY_LIMIT) -> str:
+    """Free text split on newlines. Each block is one escaped paragraph."""
+    if not isinstance(value, str):
+        return ""
+    clipped = value.strip()
+    if len(clipped) > limit:
+        clipped = clipped[: limit - 1].rstrip() + "…"
+    blocks = [" ".join(block.split()) for block in clipped.split("\n") if block.strip()]
+    return "".join(f"<p>{escape(block)}</p>" for block in blocks)
+
+
+def _points(value: Any) -> str:
+    if not isinstance(value, list):
+        return ""
+    items = [_text(point, 300) for point in value[:8]]
+    items = [point for point in items if point]
+    if not items:
+        return ""
+    return "<ul>" + "".join(f"<li>{point}</li>" for point in items) + "</ul>"
 
 
 def _rows(items: Any) -> list[dict]:
@@ -45,6 +67,9 @@ def render_quote_report(data: dict) -> str:
     else:
         item_html = "<p class='empty'>Nenhum item informado.</p>"
 
+    summary_html = _paragraphs(data.get("summary")) or "<p class='empty'>Nenhum resumo informado.</p>"
+    points_html = _points(data.get("summary_points"))
+
     return f"""<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -71,6 +96,8 @@ def render_quote_report(data: dict) -> str:
   ul {{ margin: 6px 0 0; padding-left: 18px; }}
   .item-title {{ font-weight: 700; margin: 0 0 6px; }}
   .empty {{ margin: 0; }}
+  .summary p {{ margin: 0 0 8px; line-height: 1.45; }}
+  .summary p:last-child {{ margin-bottom: 0; }}
   footer {{
     position: fixed; left: 0; right: 0; bottom: -18mm; height: 18mm;
     background: #111; color: #fff; padding: 8px 14px;
@@ -120,6 +147,12 @@ def render_quote_report(data: dict) -> str:
 <section class="card">
   <div class="pill">Informações dos conteúdos</div>
   {item_html}
+</section>
+
+<section class="card summary">
+  <div class="pill">Resumo</div>
+  {summary_html}
+  {points_html}
 </section>
 
 <footer>

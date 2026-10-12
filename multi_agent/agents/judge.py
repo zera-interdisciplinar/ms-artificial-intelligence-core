@@ -5,7 +5,7 @@ from langgraph.graph.state import CompiledStateGraph
 
 from ..entity import State, AgentName, GraphNodeFunc
 from .message_utils import parse_json_message
-from langchain.messages import HumanMessage, SystemMessage
+from langchain.messages import HumanMessage
 from logger.logger import Logger
 
 # module-level logger instance
@@ -18,9 +18,9 @@ MAX_JUDGE_ATTEMPTS: int = 2
 def make_judge_func(judge_agent: CompiledStateGraph) -> GraphNodeFunc:
     """
     Wraps judge_agent so its JSON output is parsed and projected into approved/discrepancy.
-    When the response is not approved and there are attempts left, resets the fields
-    produced by the specialist/formatter agents and appends the discrepancy to the
-    conversation so the next attempt (starting from orchestrator) can address it.
+    When the response is not approved and there are attempts left, resets the routing
+    fields; the orchestrator reads `discrepancy` on the next attempt and carries it
+    into the request, so it never lands in the persisted message history.
     """
 
     async def judge_func(state: State) -> dict[str, Any]:
@@ -44,7 +44,7 @@ def make_judge_func(judge_agent: CompiledStateGraph) -> GraphNodeFunc:
         _logger.Info("Judge agent invoked")
         _logger.Debug(f"Judge raw response={response['messages'][-1].content}")
 
-        classification = parse_json_message(response["messages"][-1].content)
+        classification = parse_json_message(response["messages"][-1].content, "approved", "discrepancy")
         _logger.Debug(f"Judge classification={classification}")
         approved = classification["approved"]
         discrepancy = classification["discrepancy"]
@@ -62,20 +62,7 @@ def make_judge_func(judge_agent: CompiledStateGraph) -> GraphNodeFunc:
 
         if will_retry:
             _logger.Warning(f"Judge: will retry due to discrepancy={discrepancy}")
-            result.update(
-                {
-                    "next_agent": None,
-                    "intent": None,
-                    "messages": [
-                        SystemMessage(
-                            content=(
-                                "A resposta anterior foi reprovada pelo judge_agent pelo "
-                                f"seguinte motivo: {discrepancy}. Corrija esse ponto na nova tentativa."
-                            )
-                        )
-                    ],
-                }
-            )
+            result.update({"next_agent": None, "intent": None})
 
         return result
 

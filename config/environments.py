@@ -23,6 +23,9 @@ class Environments:
     # APIs
     GEMINI_API_KEY: str | None
     GROQ_API_KEY: str | None
+    LLM_MODEL: str
+    LLM_FAST_MODEL: str
+    LLM_FALLBACK_MODEL: str
 
     # Database
     MONGO_URI: str
@@ -31,7 +34,7 @@ class Environments:
     MONGO_USERNAME: str | None
     MONGO_PASSWORD: str | None
 
-    # Session memory (per-thread MemorySaver cache)
+    # Session memory (Redis checkpoint TTL and how much Mongo history seeds a thread)
     SESSION_TTL_SECONDS: int
     SESSION_HISTORY_LIMIT: int
 
@@ -69,6 +72,9 @@ class Environments:
         # APIs
         self.GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
         self.GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+        self.LLM_MODEL = os.getenv("LLM_MODEL", "gemini-3.5-flash")
+        self.LLM_FAST_MODEL = os.getenv("LLM_FAST_MODEL", "gemini-3.5-flash-lite")
+        self.LLM_FALLBACK_MODEL = os.getenv("LLM_FALLBACK_MODEL", "openai/gpt-oss-120b")
 
         # Database
         self.MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
@@ -77,7 +83,7 @@ class Environments:
         self.MONGO_USERNAME = os.getenv("MONGO_USERNAME")
         self.MONGO_PASSWORD = os.getenv("MONGO_PASSWORD")
 
-        # Session memory (per-thread MemorySaver cache)
+        # Session memory (Redis checkpoint TTL and how much Mongo history seeds a thread)
         self.SESSION_TTL_SECONDS = int(os.getenv("SESSION_TTL_SECONDS", "18000"))
         self.SESSION_HISTORY_LIMIT = int(os.getenv("SESSION_HISTORY_LIMIT", "50"))
 

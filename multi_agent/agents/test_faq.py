@@ -4,7 +4,7 @@ from typing import cast
 from unittest.mock import AsyncMock, MagicMock
 
 from multi_agent.entity import AgentName, State
-from multi_agent.agents.faq import FAQ
+from multi_agent.agents.faq import FAQ, make_faq_func
 
 
 class TestFaqFunc:
@@ -19,10 +19,8 @@ class TestFaqFunc:
                 )
             ]
         })
-        faq = FAQ(envs=MagicMock(), logger=MagicMock())
-        faq.faq_agent = faq_agent
 
-        result = asyncio.run(faq.faq_func(cast(State, {"current_request": "quais perfis existem?"})))
+        result = asyncio.run(make_faq_func(faq_agent)(cast(State, {"current_request": "quais perfis existem?"})))
 
         assert result == {
             "called_agents": [AgentName.FAQ_AGENT],

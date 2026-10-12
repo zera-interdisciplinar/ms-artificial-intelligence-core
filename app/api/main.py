@@ -1,68 +1,23 @@
 """FastAPI application entrypoint for the Zera ms-artificial-intelligence-core service."""
 
+from redis.asyncio import Redis
+
 from logger.logger import Logger
 from config.environments import Environments
-from _internal.mongo.setup import Repository
-
-# admin-core client (authority on the user's unit)
-from _internal.admin_core.client import AdminCoreClient
-
-# Storage imports
-from _internal.storage.service import SupabaseStorageService
-from _internal.storage.pdf import PdfRenderer
-
-# MultiAgentRepository imports
-from repository.multi_agent import MultiAgentRepository
-from multi_agent.multi_agent import IMultiAgentRepository
-
-# MultiAgentService imports
-from multi_agent.multi_agent import IMultiAgentService
-from multi_agent.service import MultiAgentService
-
-# RouterAPI imports
 from _internal.api.router import RouterAPI
+from app.api.composition import build_service
 
 myLogger = Logger()
 myLogger.Info("Booting up ms-artificial-intelligence-core service")
 
 envs = Environments()
 
-# Open a new connection to the MongoDB database using the environment variables
-repository = Repository(envs)
+redis = Redis.from_url(envs.REDIS_URL)
+multi_agent_service, admin_core_client = build_service(envs, myLogger, redis)
 
-# create the storage service instances
-pdf_renderer = PdfRenderer()
-storage_service = SupabaseStorageService(envs)
-
-# create the MultiAgentRepository instance
-multi_agent_repository: IMultiAgentRepository = MultiAgentRepository()
-multi_agent_repository.setup(repository)
-
-myLogger.Info("MultiAgentRepository setup complete")
-
-# create the AdminCoreClient instance
-admin_core_client = AdminCoreClient(envs, myLogger)
-
-# create the multi-agent service instance
-multi_agent_service: IMultiAgentService = MultiAgentService(
-    repository=multi_agent_repository,
-    envs=envs,
-    logger=myLogger,
-    pdf_renderer=pdf_renderer,
-    storage_service=storage_service,
-    admin_core=admin_core_client,
-)
-multi_agent_service.setup()
-
-myLogger.Info("MultiAgentService setup complete")
-
-# create the FastAPI app and router
 app = RouterAPI(envs, myLogger)
+app.BuildAPI(multi_agent_service, admin_core_client, redis)
 
-# build the API router using the multi-agent service
-app.BuildAPI(multi_agent_service)
-
-# list-and-serve the API endpoints
 if __name__ == "__main__":
     myLogger.Info("Starting ms-artificial-intelligence-core service")
     app.run()

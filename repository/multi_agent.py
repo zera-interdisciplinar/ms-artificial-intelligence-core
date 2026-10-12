@@ -141,13 +141,17 @@ class MultiAgentRepository():
 
     def save_disposal_report(self, report: DisposalReport) -> None:
         """
-        Save the stored PDF of one disposal.
+        Save the stored PDF of one disposal; the first one saved wins.
         Raise RepositorySaveException if the save fails.
         """
         try:
             doc = report.model_dump(mode="python")
             doc["user_id"] = str(doc["user_id"])
-            self.disposalReportCollection.insert_one(doc)
+            doc["unit_id"] = str(doc["unit_id"]) if doc["unit_id"] else None
+            # $setOnInsert: a concurrent second save neither overwrites nor hits the unique index
+            self.disposalReportCollection.update_one(
+                {"disposal_id": doc["disposal_id"]}, {"$setOnInsert": doc}, upsert=True
+            )
         except Exception as e:
             raise RepositorySaveException(f"Failed to save disposal report: {e}")
 

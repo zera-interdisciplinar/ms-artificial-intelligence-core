@@ -5,15 +5,33 @@ from unittest.mock import AsyncMock, MagicMock
 from uuid import UUID
 
 import pytest
-from mcp.server.auth.provider import AccessToken, AuthorizationParams, TokenError
+from mcp.server.auth.provider import AuthorizationParams, TokenError
 from mcp.shared.auth import OAuthClientInformationFull
 from pydantic import AnyUrl
 from starlette.requests import Request
 from starlette.responses import HTMLResponse, RedirectResponse
 
-from _internal.mcp.oauth import ZeraOAuthProvider, ZeraRefreshToken, mount_login
+from _internal.mcp.oauth import ZeraOAuthProvider, mount_login
 
 USER_ID = UUID("11111111-1111-1111-1111-111111111111")
+
+
+class _FakeRedis:
+    """The three commands the provider uses, with the TTL each key was written with."""
+
+    def __init__(self):
+        self.data: dict[str, str] = {}
+        self.ttl: dict[str, int | None] = {}
+
+    async def set(self, key, value, ex=None):
+        self.data[key] = value
+        self.ttl[key] = ex
+
+    async def get(self, key):
+        return self.data.get(key)
+
+    async def delete(self, key):
+        self.data.pop(key, None)
 
 
 def _jwt(user_id: UUID) -> str:
@@ -22,17 +40,26 @@ def _jwt(user_id: UUID) -> str:
     return f"header.{body}.sig"
 
 
-def _provider(login_result, refresh_result=None):
+def _provider(login_result, refresh_result=None, store=None):
     admin = MagicMock()
     admin.login = AsyncMock(return_value=login_result)
     admin.refresh = AsyncMock(return_value=refresh_result)
-    provider = ZeraOAuthProvider(admin, "http://localhost:8000", MagicMock())
+    provider = ZeraOAuthProvider(admin, "http://localhost:8000", MagicMock(), store or _FakeRedis())
     client = OAuthClientInformationFull(
         client_id="claude",
         redirect_uris=[AnyUrl("http://localhost/callback")],
     )
-    provider._clients["claude"] = client
+    asyncio.run(provider.register_client(client))
     return provider, client
+
+
+def _login(provider, client):
+    login_url = asyncio.run(provider.authorize(client, _params()))
+    txn = login_url.split("txn=")[1]
+    redirect = asyncio.run(provider.submit_login(txn, "a@zera.dev", "secret"))
+    code = redirect.split("code=")[1].split("&")[0]
+    stored = asyncio.run(provider.load_authorization_code(client, code))
+    return asyncio.run(provider.exchange_authorization_code(client, stored))
 
 
 def _params():
@@ -78,7 +105,7 @@ def test_submit_login_sends_claude_back_with_the_admin_access_token():
     assert redirect is not None
     assert redirect.startswith("http://localhost/callback")
     code = redirect.split("code=")[1].split("&")[0]
-    token = asyncio.run(provider.exchange_authorization_code(client, provider._codes[code]))
+    token = asyncio.run(provider.exchange_authorization_code(client, asyncio.run(provider.load_authorization_code(client, code))))
 
     assert token.access_token == access
     assert token.refresh_token != "admin-refresh"
@@ -98,7 +125,7 @@ def test_submit_login_keeps_the_form_open_when_credentials_fail():
     txn = login_url.split("txn=")[1]
 
     assert asyncio.run(provider.submit_login(txn, "a@zera.dev", "nope")) is None
-    assert txn in provider._pending
+    assert asyncio.run(provider.has_pending(txn))
 
 
 def test_submit_login_returns_none_for_unknown_txn():
@@ -114,7 +141,7 @@ def test_register_and_get_client():
     )
     asyncio.run(provider.register_client(client))
     assert client.client_id
-    assert asyncio.run(provider.get_client(client.client_id)) is client
+    assert asyncio.run(provider.get_client(client.client_id)) == client
 
 
 def test_load_authorization_code_rejects_unknown_or_wrong_client():
@@ -148,7 +175,7 @@ def test_exchange_refresh_token_issues_a_new_admin_access():
     txn = login_url.split("txn=")[1]
     redirect = asyncio.run(provider.submit_login(txn, "a@zera.dev", "secret"))
     code = redirect.split("code=")[1].split("&")[0]
-    token = asyncio.run(provider.exchange_authorization_code(client, provider._codes[code]))
+    token = asyncio.run(provider.exchange_authorization_code(client, asyncio.run(provider.load_authorization_code(client, code))))
     stored = asyncio.run(provider.load_refresh_token(client, token.refresh_token))
     refreshed = asyncio.run(provider.exchange_refresh_token(client, stored, ["ask"]))
     assert refreshed.access_token == new_access
@@ -165,22 +192,36 @@ def test_exchange_refresh_token_raises_when_admin_rejects():
     txn = login_url.split("txn=")[1]
     redirect = asyncio.run(provider.submit_login(txn, "a@zera.dev", "secret"))
     code = redirect.split("code=")[1].split("&")[0]
-    token = asyncio.run(provider.exchange_authorization_code(client, provider._codes[code]))
+    token = asyncio.run(provider.exchange_authorization_code(client, asyncio.run(provider.load_authorization_code(client, code))))
     stored = asyncio.run(provider.load_refresh_token(client, token.refresh_token))
     with pytest.raises(TokenError):
         asyncio.run(provider.exchange_refresh_token(client, stored, ["ask"]))
 
 
 def test_revoke_drops_access_and_refresh():
-    provider, _ = _provider(None)
-    provider._access["tok"] = AccessToken(token="tok", client_id="claude", scopes=[])
-    provider._refresh["ref"] = ZeraRefreshToken(
-        token="ref", client_id="claude", scopes=[], subject=str(USER_ID), admin_refresh_token="r"
-    )
-    asyncio.run(provider.revoke_token(provider._access["tok"]))
-    asyncio.run(provider.revoke_token(provider._refresh["ref"]))
-    assert "tok" not in provider._access
-    assert "ref" not in provider._refresh
+    access = _jwt(USER_ID)
+    provider, client = _provider({"accessToken": access, "refreshToken": "admin-refresh", "expiresIn": 3600})
+    token = _login(provider, client)
+
+    asyncio.run(provider.revoke_token(asyncio.run(provider.load_access_token(access))))
+    asyncio.run(provider.revoke_token(asyncio.run(provider.load_refresh_token(client, token.refresh_token))))
+
+    assert asyncio.run(provider.load_access_token(access)) is None
+    assert asyncio.run(provider.load_refresh_token(client, token.refresh_token)) is None
+
+
+def test_login_survives_a_restart_and_every_key_expires():
+    access = _jwt(USER_ID)
+    store = _FakeRedis()
+    provider, client = _provider({"accessToken": access, "refreshToken": "admin-refresh", "expiresIn": 3600}, store=store)
+    token = _login(provider, client)
+
+    restarted = ZeraOAuthProvider(MagicMock(), "http://localhost:8000", MagicMock(), store)
+    assert asyncio.run(restarted.get_client("claude")) == client
+    assert asyncio.run(restarted.load_access_token(access)).subject == str(USER_ID)
+    assert asyncio.run(restarted.load_refresh_token(client, token.refresh_token)) is not None
+    assert store.ttl["mcp:oauth:access:" + access] == 3600
+    assert all(ttl for key, ttl in store.ttl.items() if not key.startswith("mcp:oauth:client:"))
 
 
 def test_login_page_and_submit_routes():

@@ -66,4 +66,20 @@ def test_renders_empty_sections_when_nothing_was_informed():
 
     assert "Nenhuma categoria informada." in html
     assert "Nenhum item informado." in html
+    assert "Nenhum resumo informado." in html
     assert "Número de cotação:" in html
+
+
+def test_renders_the_summary_as_paragraphs_and_points():
+    html = render_quote_report({
+        "summary": "Lote com 12 notebooks.\nUm deles está <danificado>.",
+        "summary_points": ["12 notebooks", {"nope": True}, "Tela riscada"],
+    })
+
+    assert "Resumo" in html
+    assert html.count("<section class=\"card summary\">") == 1
+    assert "<p>Lote com 12 notebooks.</p>" in html
+    assert "<p>Um deles está &lt;danificado&gt;.</p>" in html
+    assert "<li>12 notebooks</li>" in html
+    assert "<li>Tela riscada</li>" in html
+    assert "nope" not in html

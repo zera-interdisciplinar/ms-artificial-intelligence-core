@@ -2,6 +2,7 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock
 from uuid import UUID
 
+import pytest
 from langchain_core.tools import StructuredTool
 
 from .unit_scope import bind_unit_id, current_unit_id, set_unit_id
@@ -50,12 +51,22 @@ class TestBindUnitId:
 
         assert called["unitId"] == str(UNIT_ID)
 
-    def test_skips_tools_without_a_coroutine(self):
+    def test_refuses_a_tool_without_a_coroutine_at_boot(self):
         tool = MagicMock()
         tool.coroutine = None
 
-        assert bind_unit_id([tool]) == [tool]
-        assert tool.coroutine is None
+        with pytest.raises(AssertionError, match="cannot be bound"):
+            bind_unit_id([tool])
+
+    def test_never_calls_the_tool_without_a_validated_unit(self):
+        call_tool = AsyncMock()
+        tool = bind_unit_id([_tool(call_tool)])[0]
+        set_unit_id(None)
+
+        with pytest.raises(RuntimeError, match="without a validated unit_id"):
+            asyncio.run(tool.coroutine(unitId="99999999-9999-9999-9999-999999999999"))
+
+        call_tool.assert_not_awaited()
 
 
 class TestSetUnitId:

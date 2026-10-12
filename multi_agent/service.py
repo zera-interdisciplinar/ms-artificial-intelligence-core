@@ -1,28 +1,26 @@
 import asyncio
+import contextlib
 import json
-from typing import cast
-
-from langchain.messages import AIMessage, HumanMessage
-from langchain_core.tools import BaseTool
-from langchain_mcp_adapters.client import MultiServerMCPClient
-
-from multi_agent.multi_agent import IMultiAgentRepository, IMultiAgentService
-
-from .entity import DisposalReport, Message, AgentResponse, State, Role, UserPreferences
-from uuid import UUID
 from datetime import datetime, timezone
+from typing import Any, Optional, cast
+from uuid import UUID, uuid4
 
-from langgraph.graph import StateGraph
-from langgraph.graph.state import CompiledStateGraph
+from langchain.agents import create_agent
+from langchain.messages import AIMessage, HumanMessage, RemoveMessage, SystemMessage
 from langchain_core.language_models.chat_models import BaseChatModel
-from pydantic import SecretStr
+from langchain_core.messages import BaseMessage
+from langchain_core.tools import BaseTool
+from langgraph.checkpoint.base import BaseCheckpointSaver
+from langgraph.graph.state import CompiledStateGraph
 
-from config.environments import Environments
 from logger.logger import Logger
 
-# storage
-from _internal.storage.storage import IStorageService
-from _internal.storage.pdf import PdfRenderer
+from .entity import AgentName, AgentResponse, ConversationPage, DisposalReport, Message, Role, State, UserPreferences
+from .exception import MultiAgentServiceNotSetupException, UnitMismatchException
+from .graph import build_graph
+from .multi_agent import IMultiAgentRepository, IMultiAgentService, IPdfRenderer, IStorageService, IUnitResolver
+from .unit_scope import bind_unit_id
+
 # completed prompts
 from .prompt.guardrail_in import GUARDRAIL_IN_SYSTEM_PROMPT_FINAL
 from .prompt.orchestrator import ORCHESTRATOR_SYSTEM_PROMPT_FINAL
@@ -35,441 +33,220 @@ from .prompt.judge_agent import JUDGE_AGENT_SYSTEM_PROMPT_FINAL
 from .prompt.guardrail_out import GUARDRAIL_OUT_SYSTEM_PROMPT_FINAL
 from .prompt.preferences_agent import PREFERENCES_AGENT_SYSTEM_PROMPT_FINAL
 
-# checkpointer / thread cache
-from langgraph.checkpoint.base import BaseCheckpointSaver
-from .async_redis_saver import AsyncRedisSaver
-from .thread_cache import ThreadCacheEntry, ThreadCache, message_to_base_message, render_preferences
-from .agents.message_utils import parse_json_message
-
-#langchain/langgraph imports
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain.agents import create_agent
-
-# state
-from .entity import State
-
-# agents imports
-from .entity import AgentName
-
+# agents
 from .agents.guardrail import Guardrail
-from .agents.orchestrator import make_orchestrator_func, orchestrator_fate_decision
+from .agents.orchestrator import make_orchestrator_func
 from .agents.predict_model import make_predict_model_func
-from .agents.inventory import make_inventory_func, inventory_fate_decision
-from .agents.faq import FAQ
+from .agents.inventory import make_inventory_func
+from .agents.faq import make_faq_func
 from .agents.report import make_report_func
 from .agents.formatter import make_formatter_func
-from .agents.judge import make_judge_func, judge_fate_decision
+from .agents.judge import make_judge_func
+from .agents.message_utils import parse_json_message
 
-# unit scoping
-from _internal.admin_core.client import AdminCoreClient
-from .unit_scope import bind_unit_id
 
-from langchain_groq import ChatGroq
+def message_to_base_message(message: Message) -> BaseMessage:
+    """Converts a persisted Message into the BaseMessage LangGraph expects."""
 
-# exceptions
-from .exception import MultiAgentServiceNotSetupException, UnitMismatchException
+    if message.role == Role.USER:
+        return HumanMessage(content=message.content)
+    if message.role == Role.ASSISTANT:
+        return AIMessage(content=message.content)
+    return SystemMessage(content=message.content)
 
-from typing import Optional
+
+def render_preferences(preferences: UserPreferences) -> str:
+    """Renders UserPreferences into the plain-text block injected into State.user_preferences."""
+
+    parts = []
+    if preferences.writing_style:
+        parts.append(f"Estilo de escrita: {preferences.writing_style}")
+    if preferences.company_context:
+        parts.append(f"Contexto na empresa: {preferences.company_context}")
+    if preferences.frequent_requests:
+        parts.append(f"Pedidos frequentes: {', '.join(preferences.frequent_requests)}")
+    return " | ".join(parts)
+
 
 class MultiAgentService(IMultiAgentService):
-    """Concrete implementation of the multi-agent service."""
+    """
+    Application core: builds the agents over the injected adapters (models, tools,
+    checkpointer, repository) and runs the graph. Concrete providers are chosen in
+    the composition root (app/api/composition.py), never here.
+    """
 
-    graph: Optional[StateGraph[State]] = None
-    compiled_graph: Optional[CompiledStateGraph[State]] = None
-    checkpointer: BaseCheckpointSaver
-    guardrail: Guardrail
-    faq: FAQ
-    preferences_agent: CompiledStateGraph
-
-    repository: IMultiAgentRepository
-    envs: Environments
-    logger: Logger
-    pdf_renderer: PdfRenderer
-    storage_service: IStorageService
-    thread_cache: ThreadCache
-    admin_core: AdminCoreClient
+    compiled_graph: Optional[CompiledStateGraph] = None
 
     def __init__(
         self,
         repository: IMultiAgentRepository,
-        envs: Environments,
+        session_history_limit: int,
         logger: Logger,
-        pdf_renderer: PdfRenderer,
+        pdf_renderer: IPdfRenderer,
         storage_service: IStorageService,
-        admin_core: AdminCoreClient,
+        unit_resolver: IUnitResolver,
+        llm: BaseChatModel,
+        llm_fast: BaseChatModel,
+        checkpointer: BaseCheckpointSaver,
+        faq_retriever: BaseTool,
+        predict_tool: BaseTool,
+        valid_categories: list[str],
+        valid_climate_zones: list[str],
+        inventory_tools: list[BaseTool],
     ) -> None:
         self.repository = repository
-        self.envs = envs
+        self.session_history_limit = session_history_limit
         self.logger = logger
         self.pdf_renderer = pdf_renderer
         self.storage_service = storage_service
-        self.thread_cache = ThreadCache(envs.SESSION_TTL_SECONDS)
-        self.admin_core = admin_core
-
-    async def _fetch_predict_model_tools(self) -> list[BaseTool]:
-        """
-        Discovers the tools exposed by the sdk-ml-failure-predictor MCP server (predict_time_to_failure),
-        reached through the Kong gateway. The gateway route requires the api-key-auth
-        plugin, so PREDICT_MODEL_API_KEY is sent as an apikey header.
-        """
-        assert self.envs.PREDICT_MODEL_MCP_URL is not None, "PREDICT_MODEL_MCP_URL must be set to reach the predict_model MCP server"
-        assert self.envs.PREDICT_MODEL_API_KEY is not None, "PREDICT_MODEL_API_KEY must be set to authenticate against the predict_model MCP server"
-
-        client = MultiServerMCPClient(
-            {
-                "predict_model": {
-                    "url": self.envs.PREDICT_MODEL_MCP_URL,
-                    "transport": "streamable_http",
-                    "headers": {"apikey": self.envs.PREDICT_MODEL_API_KEY},
-                }
-            }
-        )
-        return await client.get_tools()
-
-    async def _fetch_predict_model_context(self) -> tuple[BaseTool, list[str], list[str]]:
-        """
-        Besides predict_time_to_failure_batch, the predict_model MCP server also exposes
-        list_valid_categories/list_valid_climate_zones, read directly from the
-        trained model's vocabulary. We call them once here to build the
-        predict_model system prompt at boot, instead of keeping a hand-copied
-        list in the prompt that can silently drift from the trained model
-        (see docs/integration-predict-time-to-failure.md).
-
-        Returns the predict_time_to_failure_batch tool so it can be bound directly to
-        predict_model_agent: the agent itself extracts, validates/clamps and calls it
-        once with every eligible item (see multi_agent/prompt/predict_model.py).
-        """
-        tools = await self._fetch_predict_model_tools()
-        tools_by_name: dict[str, BaseTool] = {tool.name: tool for tool in tools}
-
-        required = {"list_valid_categories", "list_valid_climate_zones", "predict_time_to_failure_batch"}
-        missing = required - tools_by_name.keys()
-        assert not missing, (
-            f"predict_model MCP did not return the expected tools (missing: {sorted(missing)}, "
-            f"got: {sorted(tools_by_name.keys())})"
-        )
-
-        categories: list[str] = await tools_by_name["list_valid_categories"].ainvoke({})
-        climate_zones: list[str] = await tools_by_name["list_valid_climate_zones"].ainvoke({})
-
-        predict_time_to_failure_batch = tools_by_name["predict_time_to_failure_batch"]
-
-        return predict_time_to_failure_batch, categories, climate_zones
-    
-    async def _fetch_ms_inventory_tools(self) -> list[BaseTool]:
-        """
-        Discovers the tools exposed by the ms-inventory MCP server (get_inventory),
-        reached through the Kong gateway. The gateway route requires the api-key-auth
-        plugin, so MS_INVENTORY_API_KEY is sent as an apikey header.
-
-        Every tool is wrapped by bind_unit_id so the unitId argument is always the
-        one validated in process_message, never the one the LLM produced.
-        """
-        assert self.envs.MS_INVENTORY_MCP_URL is not None, "MS_INVENTORY_MCP_URL must be set to reach the ms-inventory MCP server"
-        assert self.envs.MS_INVENTORY_API_KEY is not None, "MS_INVENTORY_API_KEY must be set to authenticate against the ms-inventory MCP server"
-
-        client = MultiServerMCPClient(
-            {
-                "ms_inventory": {
-                    "url": self.envs.MS_INVENTORY_MCP_URL,
-                    "transport": "streamable_http",
-                    "headers": {"apikey": self.envs.MS_INVENTORY_API_KEY},
-                }
-            }
-        )
-        return bind_unit_id(await client.get_tools())
+        self.unit_resolver = unit_resolver
+        self.llm = llm
+        self.llm_fast = llm_fast
+        self.checkpointer = checkpointer
+        self.faq_retriever = faq_retriever
+        self.predict_tool = predict_tool
+        self.valid_categories = valid_categories
+        self.valid_climate_zones = valid_climate_zones
+        self.inventory_tools = bind_unit_id(inventory_tools)
+        self._background: set[asyncio.Task] = set()
 
     def setup(self) -> None:
-        """
-        Setup the MultiAgentService with the provided repository.
-        """
+        """Builds every agent and compiles the graph once; thread_id partitions state between threads."""
         self.logger.Info("Setting up the multi-agent service")
 
-        # initializes the model
-        self.logger.Info("initializing the gemini llm")
-        api_key = SecretStr(self.envs.GEMINI_API_KEY) if self.envs.GEMINI_API_KEY else None
-        llm_gemini = ChatGoogleGenerativeAI(
-            model = "gemini-3.5-flash",
-            temperature = 0.2,
-            top_p = 0.9,
-            api_key = api_key,
-            reasoning_effort = "low",
+        def agent(model: BaseChatModel, prompt: str, tools: list[BaseTool] | None = None) -> CompiledStateGraph:
+            return create_agent(model=model, system_prompt=prompt, tools=tools)
+
+        self.guardrail = Guardrail(
+            agent(self.llm_fast, GUARDRAIL_IN_SYSTEM_PROMPT_FINAL),
+            agent(self.llm_fast, GUARDRAIL_OUT_SYSTEM_PROMPT_FINAL),
+            self.logger,
+        )
+        self.preferences_agent = agent(self.llm_fast, PREFERENCES_AGENT_SYSTEM_PROMPT_FINAL)
+        self.report_node = make_report_func(
+            agent(self.llm_fast, REPORT_AGENT_SYSTEM_PROMPT_FINAL, self.inventory_tools)
         )
 
-        # uses groq as fallback if gemini is not available
-        llm_groq = ChatGroq(
-            model="openai/gpt-oss-120b",
-            temperature=0.2,
-            api_key=SecretStr(self.envs.GROQ_API_KEY) if self.envs.GROQ_API_KEY else None,
-        )
-        
-        # we just use cast here to hide the type error, but in run time this should not be a problem
-        llm = cast(BaseChatModel, llm_gemini.with_fallbacks([llm_groq]))
-        
-        llm_gemini_fast = ChatGoogleGenerativeAI(
-            model = "gemini-3.5-flash-lite",
-            temperature = 0.2,
-            top_p = 0.9,
-            api_key = api_key,
-            reasoning_effort = "low",
-        )
-        llm_fast = cast(BaseChatModel, llm_gemini_fast.with_fallbacks([llm_groq]))
+        nodes = {
+            AgentName.GUARDRAIL_IN: self.guardrail.guardrail_in_func,
+            AgentName.ORCHESTRATOR: make_orchestrator_func(agent(self.llm_fast, ORCHESTRATOR_SYSTEM_PROMPT_FINAL)),
+            AgentName.PREDICT_MODEL: make_predict_model_func(agent(
+                self.llm_fast,
+                build_predict_model_system_prompt(self.valid_categories, self.valid_climate_zones),
+                [self.predict_tool],
+            )),
+            AgentName.REPORT_AGENT: self.report_node,
+            AgentName.INVENTORY_AGENT: make_inventory_func(
+                agent(self.llm, INVENTORY_AGENT_SYSTEM_PROMPT_FINAL, self.inventory_tools)
+            ),
+            AgentName.FAQ_AGENT: make_faq_func(agent(self.llm, FAQ_AGENT_SYSTEM_PROMPT_FINAL, [self.faq_retriever])),
+            AgentName.FORMATTER_AGENT: make_formatter_func(agent(self.llm_fast, FORMATTER_AGENT_SYSTEM_PROMPT_FINAL)),
+            AgentName.JUDGE_AGENT: make_judge_func(agent(self.llm_fast, JUDGE_AGENT_SYSTEM_PROMPT_FINAL)),
+            AgentName.GUARDRAIL_OUT: self.guardrail.guardrail_out_func,
+        }
 
-        # initializes the system agents
-        guardrail_in_agent = create_agent(
-            model=llm_fast,
-            system_prompt=GUARDRAIL_IN_SYSTEM_PROMPT_FINAL,
-        )
+        graph = build_graph(nodes, self.guardrail.guardrail_in_fate_decision)
+        self.compiled_graph = graph.compile(checkpointer=self.checkpointer)
 
-        orchestrator_agent = create_agent(
-            model=llm_fast,
-            system_prompt=ORCHESTRATOR_SYSTEM_PROMPT_FINAL,
-        )
+    @staticmethod
+    def _config(user_id: UUID, thread_id: UUID) -> Any:
+        return {"configurable": {"user_id": user_id, "thread_id": thread_id}}
 
-        # discovers the predict_time_to_failure_batch tool and the valid category/climateZone
-        # domains from the sdk-ml-failure-predictor MCP server (via Kong)
-        self.logger.Info("Fetching predict_model MCP tools")
-        predict_time_to_failure_batch, valid_categories, valid_climate_zones = asyncio.run(
-            self._fetch_predict_model_context()
-        )
-        predict_model_agent = create_agent(
-            model=llm_fast,
-            system_prompt=build_predict_model_system_prompt(valid_categories, valid_climate_zones),
-            tools=[predict_time_to_failure_batch],
-        )
-
-        report_agent = create_agent(
-            model=llm_fast,
-            system_prompt=REPORT_AGENT_SYSTEM_PROMPT_FINAL,
-        )
-
-        # discovers the ms-inventory MCP tools; the LLM decides at runtime which
-        self.logger.Info("Fetching ms-inventory MCP tools")
-        inventory_tools = asyncio.run(self._fetch_ms_inventory_tools())
-        inventory_agent = create_agent(
-            model=llm,
-            system_prompt=INVENTORY_AGENT_SYSTEM_PROMPT_FINAL,
-            tools=inventory_tools,
-        )
-
-        self.faq = FAQ(self.envs, self.logger)
-        self.faq.setup()
-
-        faq_agent = create_agent(
-            model=llm,
-            system_prompt=FAQ_AGENT_SYSTEM_PROMPT_FINAL,
-            tools=[self.faq.make_retrieve_context_tool()],
-        )
-        self.faq.faq_agent = faq_agent
-
-        formatter_agent = create_agent(
-            model=llm_fast,
-            system_prompt=FORMATTER_AGENT_SYSTEM_PROMPT_FINAL,
-        )
-
-        judge_agent = create_agent(
-            model=llm_fast,
-            system_prompt=JUDGE_AGENT_SYSTEM_PROMPT_FINAL,
-        )
-
-        guardrail_out_agent = create_agent(
-            model=llm_fast,
-            system_prompt=GUARDRAIL_OUT_SYSTEM_PROMPT_FINAL,
-        )
-
-        self.guardrail = Guardrail(guardrail_in_agent, guardrail_out_agent, self.repository, self.logger)
-
-        self.preferences_agent = create_agent(
-            model=llm_fast,
-            system_prompt=PREFERENCES_AGENT_SYSTEM_PROMPT_FINAL,
-        )
-
-        # initializes the state graph
-        new_graph = StateGraph(State)
-
-        new_graph.set_entry_point(AgentName.GUARDRAIL_IN)
-
-        new_graph.add_node(AgentName.GUARDRAIL_IN, self.guardrail.guardrail_in_func)
-        new_graph.add_node(AgentName.ORCHESTRATOR, make_orchestrator_func(orchestrator_agent))
-        new_graph.add_node(AgentName.PREDICT_MODEL, make_predict_model_func(predict_model_agent))
-        self.report_node = make_report_func(report_agent)
-        new_graph.add_node(AgentName.REPORT_AGENT, self.report_node)
-        new_graph.add_node(AgentName.INVENTORY_AGENT, make_inventory_func(inventory_agent))
-        new_graph.add_node(AgentName.FAQ_AGENT, self.faq.faq_func)
-        new_graph.add_node(AgentName.FORMATTER_AGENT, make_formatter_func(formatter_agent))
-        new_graph.add_node(AgentName.JUDGE_AGENT, make_judge_func(judge_agent))
-        new_graph.add_node(AgentName.GUARDRAIL_OUT, self.guardrail.guardrail_out_func)
-
-        new_graph.add_conditional_edges(
-            AgentName.GUARDRAIL_IN,
-
-            self.guardrail.guardrail_in_fate_decision,
-            {
-                AgentName.ORCHESTRATOR: AgentName.ORCHESTRATOR,
-                AgentName.END: AgentName.END,
-            }
-        )
-
-        new_graph.add_conditional_edges(
-            AgentName.ORCHESTRATOR,
-
-            orchestrator_fate_decision,
-            {
-                AgentName.PREDICT_MODEL: AgentName.PREDICT_MODEL,
-                AgentName.REPORT_AGENT: AgentName.REPORT_AGENT,
-                AgentName.FAQ_AGENT: AgentName.FAQ_AGENT,
-                AgentName.INVENTORY_AGENT: AgentName.INVENTORY_AGENT,
-                AgentName.END: AgentName.GUARDRAIL_OUT,
-            }
-        )
-
-        new_graph.add_edge(AgentName.PREDICT_MODEL, AgentName.FORMATTER_AGENT)
-        new_graph.add_edge(AgentName.REPORT_AGENT, AgentName.FORMATTER_AGENT)
-        new_graph.add_edge(AgentName.FAQ_AGENT, AgentName.FORMATTER_AGENT)
-
-        new_graph.add_conditional_edges(
-            AgentName.INVENTORY_AGENT,
-
-            inventory_fate_decision,
-            {
-                AgentName.PREDICT_MODEL: AgentName.PREDICT_MODEL,
-                AgentName.FORMATTER_AGENT: AgentName.FORMATTER_AGENT,
-            }
-        )
-
-        new_graph.add_edge(AgentName.FORMATTER_AGENT, AgentName.JUDGE_AGENT)
-
-        new_graph.add_conditional_edges(
-            AgentName.JUDGE_AGENT,
-
-            judge_fate_decision,
-            {
-                AgentName.ORCHESTRATOR: AgentName.ORCHESTRATOR,
-                AgentName.GUARDRAIL_OUT: AgentName.GUARDRAIL_OUT,
-            }
-        )
-
-        new_graph.add_edge(AgentName.GUARDRAIL_OUT, AgentName.END)
-
-        self.graph = new_graph
-        self.checkpointer = AsyncRedisSaver(redis_url=self.envs.REDIS_URL)
-        self.checkpointer.setup()
-        self.compiled_graph = new_graph.compile(checkpointer=self.checkpointer)
-
-    def _hydrate_thread(self, user_id: UUID, thread_id: UUID) -> ThreadCacheEntry:
+    async def _hydrate_thread(self, user_id: UUID, thread_id: UUID, config: Any) -> None:
         """
-        Seeds the shared checkpointer's entry for a thread that isn't cached (first
-        turn, or cache expired) with Mongo data: recent messages and the user's
-        long-term preferences. The checkpointer and compiled graph are built once in
-        setup() and shared by every thread — thread_id in config is what partitions
-        state between them, so there's no saver or compile() per thread here. Read
-        priority is always the cache — this only runs when the cache misses.
+        Seeds an empty checkpoint (first turn, or the Redis TTL expired) with Mongo
+        data: recent messages and the user's long-term preferences. Only runs when
+        the checkpoint is empty, so replicas sharing Redis never seed it twice.
         """
-        assert self.compiled_graph is not None, "graph must be compiled by setup() before hydrating a thread"
+        assert self.compiled_graph is not None
 
         self.logger.Info(f"Hydrating thread for user_id: {user_id}, thread_id: {thread_id}")
 
-        history = self.repository.retrieve_messages(user_id, thread_id, limit=self.envs.SESSION_HISTORY_LIMIT)
-        preferences = self.repository.get_preferences(user_id)
+        history = await asyncio.to_thread(
+            self.repository.retrieve_messages, user_id, thread_id, limit=self.session_history_limit
+        )
+        preferences = await asyncio.to_thread(self.repository.get_preferences, user_id)
 
-        config = {"configurable": {"user_id": user_id, "thread_id": thread_id}}
-        seed_state = cast(State, {
-            "messages": [message_to_base_message(m) for m in history],
-            "user_preferences": render_preferences(preferences) if preferences else None,
-        })
         if history or preferences:
-            self.compiled_graph.update_state(config, seed_state)
+            await self.compiled_graph.aupdate_state(config, cast(State, {
+                "messages": [message_to_base_message(m) for m in history],
+                "user_preferences": render_preferences(preferences) if preferences else None,
+            }))
 
-        entry = ThreadCacheEntry(user_id=user_id, thread_id=thread_id)
-        self.thread_cache.put(entry)
+        if history:
+            # only update the preferences if there is a new history (in this flow, there is no message in the cache)
+            task = asyncio.create_task(self._update_preferences(user_id, history, preferences))
+            self._background.add(task)
+            task.add_done_callback(self._background.discard)
 
-        self.logger.Info(f"Cached thread for user_id: {user_id}, thread_id: {thread_id} with {len(history)} messages and preferences: {preferences}")
-
-        return entry
-
-    async def _update_preferences(self, entry: ThreadCacheEntry) -> None:
+    async def _update_preferences(
+        self, user_id: UUID, history: list[Message], current: UserPreferences | None
+    ) -> None:
         """
-        Runs once, fire-and-forget, when a thread's cache TTL expires: summarizes
-        the whole conversation into long-term preferences (writing style, company
-        context, frequent requests). Never on the response critical path, and
-        never allowed to raise — a failure here must not affect anything else.
+        Fire-and-forget: summarizes a conversation into long-term preferences (writing
+        style, company context, frequent requests). Never on the response critical
+        path, and never allowed to raise.
         """
         try:
-            history = self.repository.retrieve_messages(
-                entry.user_id, entry.thread_id, limit=self.envs.SESSION_HISTORY_LIMIT
-            )
-            if not history:
-                return
-
-            current = self.repository.get_preferences(entry.user_id)
-            conversation = "\n".join(f"{m.role.value}: {m.content}" for m in history)
-
             payload = {
                 "current_preferences": current.model_dump(mode="json", exclude={"user_id", "updated_at"}) if current else None,
-                "conversation": conversation,
+                "conversation": "\n".join(f"{m.role.value}: {m.content}" for m in history),
             }
-
             response = await self.preferences_agent.ainvoke(
                 {"messages": [HumanMessage(content=json.dumps(payload))]}
             )
             extracted = parse_json_message(response["messages"][-1].content)
 
-            self.repository.upsert_preferences(
-                UserPreferences(
-                    user_id=entry.user_id,
-                    writing_style=extracted.get("writing_style"),
-                    company_context=extracted.get("company_context"),
-                    frequent_requests=extracted.get("frequent_requests") or [],
-                    updated_at=datetime.now(timezone.utc),
-                )
-            )
-            self.logger.Info(f"Updated preferences for user_id: {entry.user_id}")
+            await asyncio.to_thread(self.repository.upsert_preferences, UserPreferences(
+                user_id=user_id,
+                writing_style=extracted.get("writing_style"),
+                company_context=extracted.get("company_context"),
+                frequent_requests=extracted.get("frequent_requests") or [],
+                updated_at=datetime.now(timezone.utc),
+            ))
+            self.logger.Info(f"Updated preferences for user_id: {user_id}")
         except Exception as e:
-            self.logger.Error(f"Failed to update preferences for user_id: {entry.user_id}", e)
+            self.logger.Error(f"Failed to update preferences for user_id: {user_id}", e)
 
-    async def _validate_unit(self, user_id: UUID, unit_id: UUID, authorization: str) -> None:
-        """The request only says which unit it *wants*; ms-administrative-core says
-        which one the user actually belongs to. Anything else is a 403 — an
-        unresolvable user is refused too, never widened into a global read."""
+    async def _resolve_unit(self, user_id: UUID, claimed: UUID | None, authorization: str) -> UUID:
+        """ms-administrative-core says which unit the user belongs to. A claimed unit
+        that differs, or an unresolvable user, is refused — never widened into a global read."""
 
-        actual_unit_id = await self.admin_core.get_unit_id(user_id, authorization)
-        if actual_unit_id is None or actual_unit_id != unit_id:
-            self.logger.Warning(
-                f"Rejected unit_id {unit_id} for user_id: {user_id} (admin-core says {actual_unit_id})"
-            )
+        actual = await self.unit_resolver.get_unit_id(user_id, authorization)
+        if actual is None or (claimed is not None and actual != claimed):
+            self.logger.Warning(f"Rejected unit_id {claimed} for user_id: {user_id} (admin-core says {actual})")
             raise UnitMismatchException(f"unit_id does not belong to user {user_id}")
+        return actual
 
     async def process_message(
-        self, message: str, user_id: UUID, thread_id: UUID, unit_id: UUID, authorization: str
+        self, message: str, user_id: UUID, thread_id: UUID, unit_id: UUID | None, authorization: str
     ) -> AgentResponse:
-        # certifies that the graph is already compiled
         if self.compiled_graph is None:
             self.logger.Error("The multi-agent service is not set up. Please call the setup() method before processing messages.", MultiAgentServiceNotSetupException)
             raise MultiAgentServiceNotSetupException("The multi-agent service is not set up. Please call the setup() method before processing messages.")
 
-        await self._validate_unit(user_id, unit_id, authorization)
+        # resolve the unit_id for the user
+        # when fetching the unit_id, the system also validates the authorization header
+        unit_id = await self._resolve_unit(user_id, unit_id, authorization)
 
-        # get the cache entry in memory
-        session: ThreadCacheEntry = self.thread_cache.get(thread_id)
-        if session:
-            self.logger.Info(f"Cache hit for user_id: {user_id}, thread_id: {thread_id}")
-            session.touch()  # refreshes the TTL
-        else:
-            self.logger.Info(f"Cache miss for user_id: {user_id}, thread_id: {thread_id}. Hydrating thread.")
-            session = self._hydrate_thread(user_id, thread_id)
+        config = self._config(user_id, thread_id)
+        if not (await self.compiled_graph.aget_state(config)).values:
+            await self._hydrate_thread(user_id, thread_id, config)
+
+        # guardrail_in replaces it in place with the masked text (same id), or removes it if blocked
+        user_message_id = str(uuid4())
+        user_message = HumanMessage(content=message, id=user_message_id)
+        received_at = datetime.now(timezone.utc)
 
         # delta state: only the fields with a reducer (reset by an empty/zero value) plus the
         # fields that a node may skip this turn and that would otherwise leak the previous
-        # turn's value through the checkpoint. Everything else (current_request, intent,
-        # next_agent, answer, formatted_response, final_response, user_preferences) is either
-        # always written by the node that reads it, or must survive across turns.
+        # turn's value through the checkpoint.
         initial_state = cast(
             State,
             {
-                "messages": [HumanMessage(content=message)],
+                "messages": [user_message],
                 "called_agents": [],
                 "current_request": None,
-                "user_preferences": None,
                 "unit_id": str(unit_id),
                 "next_agent": None,
                 "intent": None,
@@ -493,53 +270,48 @@ class MultiAgentService(IMultiAgentService):
 
         self.logger.Info(f"Processing message for user_id: {user_id}, thread_id: {thread_id}")
 
-        end_state = await self.compiled_graph.ainvoke(
-            initial_state,
-            config = {
-                "configurable": {
-                    "user_id": user_id,
-                    "thread_id": thread_id
-                }
-            }
-        )
-
-        # sweep threads whose cache TTL expired: drop their entry from the shared
-        # checkpointer (otherwise it would never be freed) and update their
-        # preferences once, over the whole conversation, fire-and-forget so it
-        # never adds latency to this (or any) request.
-        for expired_entry in self.thread_cache.sweep():
-            self.checkpointer.delete_thread(str(expired_entry.thread_id))
-            asyncio.create_task(self._update_preferences(expired_entry))
+        try:
+            end_state = await self.compiled_graph.ainvoke(initial_state, config=config)
+        except Exception:
+            # a failed turn must not leave a question without an answer for the next turn;
+            # as guardrail_out, so the half-finished run is closed instead of resumed
+            with contextlib.suppress(Exception):
+                await self.compiled_graph.aupdate_state(
+                    config, {"messages": [RemoveMessage(id=user_message_id)]}, as_node=AgentName.GUARDRAIL_OUT
+                )
+            raise
 
         # the flow only leaves guardrail_in when blocked=False there; if blocked=True and
-        # the orchestrator was never reached, the flow stopped at guardrail_in, so we don't
-        # save a final message for it. blocked=True set later on (orchestrator's unclassified
-        # intent, guardrail_out) still produces a message worth saving.
+        # the orchestrator was never reached, the flow stopped at guardrail_in, so nothing
+        # is saved. blocked=True set later on (orchestrator's unclassified intent,
+        # guardrail_out) still produces a turn worth saving.
         stopped_at_guardrail_in = end_state["blocked"] and AgentName.ORCHESTRATOR not in end_state["called_agents"]
 
         if not stopped_at_guardrail_in:
+            masked = next(m for m in end_state["messages"] if m.id == user_message_id)
             assistant_content = end_state["final_response"] or end_state["blocked_reason"] or ""
 
-            self.logger.Info(f"Saving message for user_id: {user_id}, thread_id: {thread_id}, content: {assistant_content}")
-
-            self.repository.save_message(
-                Message(
-                    user_id=user_id,
-                    thread_id=thread_id,
-                    role=Role.ASSISTANT,
-                    content=assistant_content,
-                    agent=AgentName.GUARDRAIL_OUT,
-                    created_at=datetime.now(timezone.utc),
-                )
-            )
+            # question and answer are saved together, only once the whole turn succeeded
+            await asyncio.to_thread(self.repository.save_message, Message(
+                user_id=user_id,
+                thread_id=thread_id,
+                role=Role.USER,
+                content=str(masked.content),
+                agent=AgentName.GUARDRAIL_IN,
+                created_at=received_at,
+            ))
+            await asyncio.to_thread(self.repository.save_message, Message(
+                user_id=user_id,
+                thread_id=thread_id,
+                role=Role.ASSISTANT,
+                content=assistant_content,
+                agent=AgentName.GUARDRAIL_OUT,
+                created_at=datetime.now(timezone.utc),
+            ))
 
             # feeds the assistant's reply back into the checkpoint so the orchestrator
-            # can resolve conversational references on the next turn —
-            # without this, state["messages"] would only ever contain user turns.
-            self.compiled_graph.update_state(
-                {"configurable": {"user_id": user_id, "thread_id": thread_id}},
-                {"messages": [AIMessage(content=assistant_content)]},
-            )
+            # can resolve conversational references on the next turn.
+            await self.compiled_graph.aupdate_state(config, {"messages": [AIMessage(content=assistant_content)]})
 
         self.logger.Info(f"Finished processing message for user_id: {user_id}, thread_id: {thread_id}")
 
@@ -550,36 +322,55 @@ class MultiAgentService(IMultiAgentService):
             agent_trace = end_state["called_agents"],
         )
 
-    async def create_disposal_report(self, user_id: UUID, disposal_id: str) -> str:
+    async def create_disposal_report(self, user_id: UUID, disposal_id: str, authorization: str) -> str:
         """
         Generate and store the PDF for one disposal, or return the URL already stored.
         Uses the same report agent as the chat; only this path uploads the PDF.
+        unit_id is resolved here and injected into get_disposal_report, the same way the chat does.
         """
-        existing = self.repository.get_disposal_report(disposal_id)
+        unit_id = await self._resolve_unit(user_id, None, authorization)
+
+        existing = await asyncio.to_thread(self.repository.get_disposal_report, disposal_id)
         if existing is not None:
+            if not self._owns(existing, user_id, unit_id):
+                raise UnitMismatchException(f"disposal {disposal_id} does not belong to the unit of user {user_id}")
             return existing.report_url
 
-        result = await self.report_node({
+        result = await self.report_node(cast(State, {
             "current_request": f"Gere o relatório do descarte {disposal_id}.",
             "messages": [],
             "user_preferences": None,
-        })
-        pdf_bytes = self.pdf_renderer.render(result["report_html"])
-        report_url = self.storage_service.upload(
+            "unit_id": str(unit_id),
+        }))
+        pdf_bytes = await asyncio.to_thread(self.pdf_renderer.render, result["report_html"])
+        report_url = await asyncio.to_thread(
+            self.storage_service.upload,
             content=pdf_bytes,
             filename=f"disposal-{disposal_id}.pdf",
             content_type="application/pdf",
         )
-        self.repository.save_disposal_report(DisposalReport(
+        await asyncio.to_thread(self.repository.save_disposal_report, DisposalReport(
             disposal_id=disposal_id,
             user_id=user_id,
+            unit_id=unit_id,
             report_url=report_url,
             created_at=datetime.now(timezone.utc),
         ))
         return report_url
 
-    def get_disposal_report(self, disposal_id: str) -> str | None:
-        """The stored PDF URL for this disposal, or None if it was never generated."""
-        existing = self.repository.get_disposal_report(disposal_id)
-        return existing.report_url if existing is not None else None
+    async def get_disposal_report(self, user_id: UUID, disposal_id: str, authorization: str) -> str | None:
+        """The stored PDF URL for this disposal, or None if it was never generated or is another unit's."""
+        unit_id = await self._resolve_unit(user_id, None, authorization)
+        existing = await asyncio.to_thread(self.repository.get_disposal_report, disposal_id)
+        return existing.report_url if existing is not None and self._owns(existing, user_id, unit_id) else None
 
+    @staticmethod
+    def _owns(report: DisposalReport, user_id: UUID, unit_id: UUID) -> bool:
+        # reports stored before unit_id was recorded are only handed back to whoever generated them
+        return report.unit_id == unit_id if report.unit_id is not None else report.user_id == user_id
+
+    def list_conversations(self, user_id: UUID, page: int, page_size: int) -> ConversationPage:
+        return self.repository.list_conversations(user_id, page, page_size)
+
+    def get_conversation(self, user_id: UUID, thread_id: UUID) -> list[Message]:
+        return self.repository.retrieve_messages(user_id, thread_id, limit=None)

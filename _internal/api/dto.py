@@ -9,18 +9,16 @@ from multi_agent.entity import Role
 
 
 class ProcessMessageRequest(BaseModel):
-    """Body of POST /multi-agent/process-message."""
+    """Body of POST /multi-agent/process-message. The user comes from the Bearer, not from here."""
 
-    user_id: UUID
     thread_id: UUID
     unit_id: UUID  # proposed by the caller, validated against ms-administrative-core
     content: str = Field(min_length=1, max_length=8000)
 
 
 class DisposalReportRequest(BaseModel):
-    """Body of POST /reports."""
+    """Body of POST /reports. The user comes from the Bearer, not from here."""
 
-    user_id: UUID
     disposal_id: str = Field(min_length=1)
 
 

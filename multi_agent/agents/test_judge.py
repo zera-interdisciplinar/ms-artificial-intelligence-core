@@ -81,8 +81,8 @@ class TestJudgeFunc:
         assert result["discrepancy"] == "response_omits_data"
         assert result["next_agent"] is None
         assert result["intent"] is None
-        assert len(result["messages"]) == 1
-        assert "response_omits_data" in result["messages"][0].content
+        # the reason travels through state["discrepancy"], never the persisted history
+        assert "messages" not in result
 
     def test_does_not_reset_fields_when_rejected_and_attempts_exhausted(self):
         judge_agent = MagicMock()

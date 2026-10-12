@@ -1,7 +1,7 @@
 from supabase import create_client, Client
 
 from config.environments import Environments
-from .storage import IStorageService
+from multi_agent.multi_agent import IStorageService
 from .exceptions import StorageConfigurationException, StorageUploadException
 
 

@@ -6,11 +6,11 @@ Pipeline for FAIIS: read -> preprocess -> chunking -> embedding -> FAISS -> cont
 FAQ agent package with a wrapper function to parse its output into a json format to update the state with answer and sources.
 """
 
-from typing import Any, Optional
+from typing import Any
 
 from config.environments import Environments
 
-from ..entity import State, AgentName
+from ..entity import State, AgentName, GraphNodeFunc
 from .message_utils import parse_json_message, request_with_history
 from logger.logger import Logger
 from pydantic import SecretStr
@@ -26,9 +26,14 @@ from langchain_core.tools import BaseTool
 from langchain.tools import tool
 from langgraph.graph.state import CompiledStateGraph
 
+# module-level logger instance
+_logger = Logger()
+
+
 class FAQ:
     """
-    Class that holds the faq_agent and the functions that use it.
+    FAISS index over the support PDF, exposed to faq_agent as the retrieve_context tool.
+    Built in the composition root; the core only receives the tool.
     """
 
     _faiss_indexes: FAISS
@@ -36,7 +41,6 @@ class FAQ:
     logger: Logger
 
     def __init__(self, envs: Environments, logger: Logger) -> None:
-        self.faq_agent: Optional[CompiledStateGraph] = None
         self.envs = envs
         self.logger = logger
 
@@ -87,23 +91,26 @@ class FAQ:
         return retrieve_context
 
 
-    async def faq_func(self, state: State) -> dict[str, Any]:
-        """
-        Wraps faq_agent so its JSON output is parsed and projected into answer/sources.
-        """
-        assert self.faq_agent is not None, "faq_agent is not set; call setup() and assign faq_agent before invoking"
+def make_faq_func(faq_agent: CompiledStateGraph) -> GraphNodeFunc:
+    """
+    Wraps faq_agent so its JSON output is parsed and projected into answer/sources.
+    """
+
+    async def faq_func(state: State) -> dict[str, Any]:
         request = request_with_history(
             state["current_request"], state.get("messages"), state.get("user_preferences")
         )
-        response = await self.faq_agent.ainvoke({"messages": request})
-        self.logger.Info("FAQ agent invoked")
+        response = await faq_agent.ainvoke({"messages": request})
+        _logger.Info("FAQ agent invoked")
 
-        self.logger.Debug(f"FAQ raw response={response['messages'][-1].content}")
-        formated_response = parse_json_message(response["messages"][-1].content)
-        self.logger.Debug(f"FAQ formatted response={formated_response}")
+        _logger.Debug(f"FAQ raw response={response['messages'][-1].content}")
+        formated_response = parse_json_message(response["messages"][-1].content, "answer", "sources")
+        _logger.Debug(f"FAQ formatted response={formated_response}")
 
         return {
             "called_agents": [AgentName.FAQ_AGENT],
             "answer": formated_response["answer"],
             "sources": formated_response["sources"],
         }
+
+    return faq_func

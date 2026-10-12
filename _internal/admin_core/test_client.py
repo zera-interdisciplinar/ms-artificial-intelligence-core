@@ -20,9 +20,29 @@ def envs() -> Any:
     return envs
 
 
+class _FakeRedis:
+    """get/set with the TTL each key was written with; values come back as bytes like real Redis."""
+
+    def __init__(self):
+        self.data: dict[str, bytes] = {}
+        self.ttl: dict[str, int | None] = {}
+
+    async def set(self, key, value, ex=None):
+        self.data[key] = value.encode()
+        self.ttl[key] = ex
+
+    async def get(self, key):
+        return self.data.get(key)
+
+
 @pytest.fixture
-def client(envs: Any) -> AdminCoreClient:
-    return AdminCoreClient(envs, MagicMock())
+def store() -> _FakeRedis:
+    return _FakeRedis()
+
+
+@pytest.fixture
+def client(envs: Any, store: _FakeRedis) -> AdminCoreClient:
+    return AdminCoreClient(envs, MagicMock(), store)  # type: ignore[arg-type]
 
 
 def _http_client(response: Any) -> MagicMock:
@@ -52,20 +72,23 @@ class TestGetUnitId:
             headers={"apikey": "fake-key", "Authorization": "Bearer test-token"},
         )
 
-    def test_caches_the_answer_instead_of_calling_on_every_turn(self, client):
+    def test_caches_the_answer_in_redis_with_a_fixed_ttl(self, client, store):
         http = _http_client(_response(200, {"unitId": str(UNIT_ID)}))
 
         with patch("httpx.AsyncClient", return_value=http):
-            asyncio.run(client.get_unit_id(USER_ID, "Bearer test-token"))
-            asyncio.run(client.get_unit_id(USER_ID, "Bearer test-token"))
+            assert asyncio.run(client.get_unit_id(USER_ID, "Bearer test-token")) == UNIT_ID
+            assert asyncio.run(client.get_unit_id(USER_ID, "Bearer test-token")) == UNIT_ID
 
         assert http.get.await_count == 1
+        assert store.ttl == {f"admin_core:unit:{USER_ID}": 360}
 
-    def test_returns_none_when_the_user_is_unknown(self, client):
+    def test_returns_none_when_the_user_is_unknown_and_does_not_cache_it(self, client, store):
         http = _http_client(_response(404))
 
         with patch("httpx.AsyncClient", return_value=http):
             assert asyncio.run(client.get_unit_id(USER_ID, "Bearer test-token")) is None
+
+        assert store.data == {}
 
     def test_returns_none_when_the_user_has_no_unit(self, client):
         http = _http_client(_response(200, {"userId": str(USER_ID), "unitId": None}))

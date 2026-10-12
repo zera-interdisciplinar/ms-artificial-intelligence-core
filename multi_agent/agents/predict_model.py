@@ -27,7 +27,7 @@ def make_predict_model_func(predict_model_agent: CompiledStateGraph) -> GraphNod
         _logger.Info("Predict model agent invoked")
 
         _logger.Debug(f"Predict model raw response={response['messages'][-1].content}")
-        classification = parse_json_message(response["messages"][-1].content)
+        classification = parse_json_message(response["messages"][-1].content, "predictions")
         _logger.Debug(f"Predict model classification={classification}")
 
         predictions: list[PredictionItem] = [PredictionItem(**item) for item in classification["predictions"]]

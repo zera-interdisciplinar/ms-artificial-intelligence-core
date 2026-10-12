@@ -3,10 +3,15 @@ from contextlib import asynccontextmanager
 from logger.logger import Logger
 from config.environments import Environments
 
-from fastapi import FastAPI, APIRouter
+from fastapi import FastAPI, APIRouter, Request
+from fastapi.responses import JSONResponse
+from redis.asyncio import Redis
 
+from multi_agent.exception import AgentOutputException
 from multi_agent.multi_agent import IMultiAgentService
+from repository.exception import RepositoryException
 
+from _internal.admin_core.client import AdminCoreClient
 from _internal.mcp.server import build_mcp
 
 from .multi_agent_handlers import multi_agent_handlers, report_handlers
@@ -30,7 +35,7 @@ class RouterAPI:
         self.envs = envs
         self.logger = logger
 
-    def BuildAPI(self, multi_agent_service: IMultiAgentService) -> None:
+    def BuildAPI(self, multi_agent_service: IMultiAgentService, admin_core: AdminCoreClient, oauth_store: Redis) -> None:
         """
         BuildAPI is a method that sets up the API endpoints and their corresponding logic. It initializes the necessary components and prepares the API for handling requests.
         """
@@ -38,9 +43,10 @@ class RouterAPI:
         if self.envs.SELF_MCP_URL:
             mcp = build_mcp(
                 multi_agent_service,
-                multi_agent_service.admin_core,
+                admin_core,
                 self.logger,
                 self.envs,
+                oauth_store,
             )
             mcp_app = mcp.streamable_http_app()
 
@@ -56,6 +62,16 @@ class RouterAPI:
                 yield
 
         self._app = FastAPI(lifespan=lifespan)
+
+        @self._app.exception_handler(AgentOutputException)
+        async def agent_output_handler(_request: Request, exc: AgentOutputException) -> JSONResponse:
+            self.logger.Error("An agent returned an unexpected output", exc)
+            return JSONResponse(status_code=502, content={"detail": "an upstream model returned an invalid answer"})
+
+        @self._app.exception_handler(RepositoryException)
+        async def repository_handler(_request: Request, exc: RepositoryException) -> JSONResponse:
+            self.logger.Error("Repository failure", exc)
+            return JSONResponse(status_code=503, content={"detail": "storage temporarily unavailable"})
 
         @self._app.get("/health", tags=["health"])
         async def health_check() -> dict[str, str]:

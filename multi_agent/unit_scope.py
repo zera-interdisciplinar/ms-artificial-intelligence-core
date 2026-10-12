@@ -22,17 +22,20 @@ def set_unit_id(unit_id: UUID | str | None) -> None:
 def bind_unit_id(tools: list[BaseTool]) -> list[BaseTool]:
     """
     Wraps each tool so unitId is always the validated one, never the LLM's.
-    
-    The system will validate the user before ivoking the multi-agent graph, so the unit_id is guaranteed to be correct.
+    Fails loudly instead of letting a call through with the LLM's unitId (a tool
+    with no async implementation to wrap) or with no unit at all (a node that
+    forgot set_unit_id), either of which could become an unscoped read.
     """
 
     for tool in tools:
-        original = tool.coroutine
-        if original is None:
-            continue
+        original = getattr(tool, "coroutine", None)
+        assert original is not None, f"{tool.name} has no async implementation, so its unitId cannot be bound"
 
-        async def bound(*args, __original=original, **kwargs):
-            kwargs["unitId"] = current_unit_id.get()
+        async def bound(*args, __original=original, __name=tool.name, **kwargs):
+            unit_id = current_unit_id.get()
+            if unit_id is None:
+                raise RuntimeError(f"{__name} called without a validated unit_id; set_unit_id was not called")
+            kwargs["unitId"] = unit_id
             return await __original(*args, **kwargs)
 
         tool.coroutine = bound
