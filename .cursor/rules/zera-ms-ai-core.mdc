@@ -5,7 +5,7 @@ alwaysApply: true
 
 # ms-artificial-intelligence-core
 
-API FastAPI + LangGraph (guardrail in/out, orchestrator, faq, report, predict_model, formatter, judge). MongoDB, FAISS (FAQ), Supabase + WeasyPrint (PDF).
+API FastAPI + LangGraph (guardrail in/out, orchestrator, faq, report, predict_model, formatter, judge). MongoDB, Qdrant (FAQ), Supabase + WeasyPrint (PDF).
 
 ## Comandos
 

@@ -40,6 +40,9 @@ class Environments:
 
     # FAQ
     FAQ_PDF_PATH: str
+    QDRANT_API_KEY: str | None
+    QDRANT_CLUSTER_URL: str | None
+    QDRANT_COLLECTION: str
 
     # predict_model MCP (sdk-ml-failure-predictor, via Kong gateway)
     PREDICT_MODEL_MCP_URL: str | None
@@ -88,7 +91,10 @@ class Environments:
         self.SESSION_HISTORY_LIMIT = int(os.getenv("SESSION_HISTORY_LIMIT", "50"))
 
         # FAQ
-        self.FAQ_PDF_PATH = os.getenv("FAQ_PDF_PATH", "multi_agent/agents/data/faq.pdf")
+        self.FAQ_PDF_PATH = os.getenv("FAQ_PDF_PATH", "local/faq.pdf")
+        self.QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")
+        self.QDRANT_CLUSTER_URL = os.getenv("QDRANT_CLUSTER_URL")
+        self.QDRANT_COLLECTION = os.getenv("QDRANT_COLLECTION", "faq")
 
         # predict_model MCP (sdk-ml-failure-predictor, via Kong gateway)
         self.PREDICT_MODEL_MCP_URL = os.getenv("PREDICT_MODEL_MCP_URL")

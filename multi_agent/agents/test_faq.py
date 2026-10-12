@@ -31,15 +31,15 @@ class TestFaqFunc:
 
 
 class TestMakeRetrieveContextTool:
-    def test_queries_the_faiss_index_with_the_given_context(self):
+    def test_queries_the_store_with_the_given_context(self):
         faq = FAQ(envs=MagicMock(), logger=MagicMock())
-        faq._faiss_indexes = MagicMock()
-        faq._faiss_indexes.similarity_search.return_value = ["doc1", "doc2"]
+        faq._store = MagicMock()
+        faq._store.similarity_search.return_value = ["doc1", "doc2"]
 
         tool = faq.make_retrieve_context_tool()
         result = tool.invoke({"ctx": "quais perfis existem?"})
 
-        faq._faiss_indexes.similarity_search.assert_called_once_with(
+        faq._store.similarity_search.assert_called_once_with(
             "quais perfis existem?", k=6
         )
         assert result == ["doc1", "doc2"]

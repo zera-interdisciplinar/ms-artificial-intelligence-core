@@ -55,7 +55,7 @@ Se o admin-core ainda só expõe login com e-mail e senha, o authorization serve
 
 `process_message` resolve a unidade no admin-core (a fachada passa `unit_id=None`), hidrata o fio do MongoDB quando o checkpoint no Redis está vazio (mensagens e preferências) e invoca o grafo compilado.
 
-Ordem: guardrail de entrada (bloqueio encerra), orquestrador (fora de escopo vai para o guardrail de saída), um de FAQ (FAISS), inventário, predição ou relatório em texto. Inventário pode seguir para predição. Especialista vai para o formatter, depois o judge. Judge reprovado volta ao orquestrador. Aprovado vai para o guardrail de saída.
+Ordem: guardrail de entrada (bloqueio encerra), orquestrador (fora de escopo vai para o guardrail de saída), um de FAQ (Qdrant), inventário, predição ou relatório em texto. Inventário pode seguir para predição. Especialista vai para o formatter, depois o judge. Judge reprovado volta ao orquestrador. Aprovado vai para o guardrail de saída.
 
 PDF de descarte não é operação desta fachada. Segue na API de relatório do app.
 

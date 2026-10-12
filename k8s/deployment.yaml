@@ -53,8 +53,6 @@ spec:
           value: "8000"
         - name: APP_HOST
           value: "0.0.0.0"
-        - name: FAQ_PDF_PATH
-          value: "multi_agent/agents/data/faq.pdf"
         - name: PREDICT_MODEL_MCP_URL
           valueFrom:
             secretKeyRef:

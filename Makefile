@@ -11,7 +11,7 @@ HOST ?= 0.0.0.0
 PORT ?= 8000
 COVERAGE_MIN ?= 80
 
-.PHONY: help install test test-integration test-cov run dev up up-debug down logs restart clean
+.PHONY: help install test test-integration test-cov run dev up up-debug down logs restart clean index-faq
 
 help:
 	@echo "Available targets:"
@@ -27,9 +27,13 @@ help:
 	@echo "  logs             Follow docker-compose logs for mongo"
 	@echo "  restart          Restart docker-compose services"
 	@echo "  clean            Remove local caches and coverage artifacts"
+	@echo "  index-faq        Recreate the FAQ Qdrant collection from FAQ_PDF_PATH""
 
 install:
 	$(PIP) install -r requirements.txt
+
+index-faq:
+	PYTHONPATH=. $(PYTHON) script/index_faq.py
 
 test:
 	$(PYTEST) -m "not integration"

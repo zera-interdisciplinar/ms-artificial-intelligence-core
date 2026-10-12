@@ -55,7 +55,7 @@ def build_service(envs: Environments, logger: Logger, store: Redis) -> tuple[Mul
     )
     checkpointer.setup()
 
-    # cross-repo tools (via Kong) and the FAQ index
+    # cross-repo tools (via Kong) and the FAQ Qdrant retriever
     logger.Info("Fetching predict_model and ms-inventory MCP tools")
     predict_tool, valid_categories, valid_climate_zones = asyncio.run(fetch_predict_model_context(envs))
     inventory_tools = asyncio.run(fetch_ms_inventory_tools(envs))

@@ -10,6 +10,10 @@ ENV_VARS = [
     "MONGO_DB_NAME",
     "MONGO_USERNAME",
     "MONGO_PASSWORD",
+    "QDRANT_API_KEY",
+    "QDRANT_CLUSTER_URL",
+    "QDRANT_COLLECTION",
+    "FAQ_PDF_PATH",
 ]
 
 
@@ -27,9 +31,11 @@ def test_defaults_are_applied_when_env_is_empty(clean_env):
     assert envs.MONGO_URI == "mongodb://localhost:27017"
     assert envs.REDIS_URL == "redis://localhost:6379"
     assert envs.MONGO_DB_NAME == "ms-artificial-intelligence-core"
+    assert envs.FAQ_PDF_PATH == "local/faq.pdf"
+    assert envs.QDRANT_COLLECTION == "faq"
 
 
-@pytest.mark.parametrize("name", ["GEMINI_API_KEY", "MONGO_PASSWORD", "MONGO_USERNAME"])
+@pytest.mark.parametrize("name", ["GEMINI_API_KEY", "MONGO_PASSWORD", "MONGO_USERNAME", "QDRANT_API_KEY", "QDRANT_CLUSTER_URL"])
 def test_secrets_have_no_default(clean_env, name):
     """Secrets must stay unset rather than fall back to a hardcoded value."""
     assert getattr(Environments(), name) is None
