@@ -50,10 +50,12 @@ múltiplas partes e não anexe metadados, raciocínio ou qualquer conteúdo alé
 do próprio objeto JSON.
 
 Trechos relevantes recuperados:
-{"answer": "<resposta_baseada_nos_trechos>", "sources": ["<id_do_trecho>"]}
+{"answer": "<resposta_baseada_nos_trechos>", "sources": ["<id_do_trecho>"], "redirect_to": {"screen": "<Route>", "message": "<mensagem_de_exibicao>"}}
 
 Nenhum trecho relevante recuperado:
-{"answer": "Não foi encontrada informação sobre esse tema na base de conhecimento interna do Zera.", "sources": []}
+{"answer": "Não foi encontrada informação sobre esse tema na base de conhecimento interna do Zera.", "sources": [], "redirect_to": null}
+
+`answer` é a mensagem de texto para o chat. `redirect_to` é o atalho abaixo dela, só quando os trechos do FAQ trouxerem uma tela. `screen` é o protocolo de encaminhamento (nome da rota Android Route.kt, PascalCase, sem o prefixo Route.). `message` é a mensagem de exibição no componente do atalho. Copie `screen` exatamente como no trecho. Sem tela aplicável: redirect_to null. Não invente rota. Não coloque o atalho dentro de `answer`.
 """
 
 SHOTS_OPEN_NOTICE: str = (
@@ -64,23 +66,29 @@ SHOTS_OPEN_NOTICE: str = (
 
 SHOT_1: str = """
 Usuário: "O que acontece com um item classificado como aproveitável para peças?"
-Assistente: {"answer": "Itens classificados como aproveitáveis para peças são separados para reuso interno em outros equipamentos, o que reduz a necessidade de compra de peças novas.", "sources": ["zera_overview.pdf#p3"]}
+Assistente: {"answer": "Itens classificados como aproveitáveis para peças são separados para reuso interno em outros equipamentos, o que reduz a necessidade de compra de peças novas.", "sources": ["zera_overview.pdf#p3"], "redirect_to": {"screen": "Recycling", "message": "Abrir Reciclagem"}}
 """
 
 SHOT_2: str = """
 Usuário: "Qual o valor de mercado atual das baterias recicladas pelo Zera?"
-Assistente: {"answer": "Não foi encontrada informação sobre esse tema na base de conhecimento interna do Zera.", "sources": []}
+Assistente: {"answer": "Não foi encontrada informação sobre esse tema na base de conhecimento interna do Zera.", "sources": [], "redirect_to": null}
 """
 
 SHOT_3: str = """
 Usuário: "Quais perfis de usuário existem no sistema Zera?"
-Assistente: {"answer": "O sistema Zera possui três perfis de usuário: Funcionário, responsável por triagem, escaneamento, inventário e manutenção; Gestor, responsável por relatórios, alertas e análises preventivas; e Administrador, com acesso total, incluindo gestão de usuários e confirmação de descartes.", "sources": ["zera_overview.pdf#p2"]}
+Assistente: {"answer": "O sistema Zera possui três perfis de usuário: Funcionário, responsável por triagem, escaneamento, inventário e manutenção; Gestor, responsável por relatórios, alertas e análises preventivas; e Administrador, com acesso total, incluindo gestão de usuários e confirmação de descartes.", "sources": ["zera_overview.pdf#p2"], "redirect_to": {"screen": "Profile", "message": "Abrir Perfil"}}
 """
 
 SHOT_4: str = """
 Usuário: "Você disse que o Gestor cuida das análises preventivas — o que são essas análises preventivas, exatamente?"
 [Assistente chama retrieve_context normalmente com essa dúvida de esclarecimento]
-Assistente: {"answer": "Análises preventivas são avaliações periódicas do estado dos equipamentos, feitas pelo Gestor a partir das previsões de vida útil, para antecipar manutenções antes de uma falha ocorrer.", "sources": ["zera_overview.pdf#p2"]}
+Assistente: {"answer": "Análises preventivas são avaliações periódicas do estado dos equipamentos, feitas pelo Gestor a partir das previsões de vida útil, para antecipar manutenções antes de uma falha ocorrer.", "sources": ["zera_overview.pdf#p2"], "redirect_to": {"screen": "Indexes", "message": "Ver Indicadores"}}
+"""
+
+SHOT_5: str = """
+Usuário: "Como faço para identificar um equipamento pelo código de barras?"
+[Assistente chama retrieve_context; os trechos trazem protocolo Scan e mensagem de exibição]
+Assistente: {"answer": "No app, a tela Escanear lê o código de barras. Se o item existe, abre o detalhe; se não, segue para o cadastro manual.", "sources": ["zera_overview.pdf#p10"], "redirect_to": {"screen": "Scan", "message": "Escanear código de barras"}}
 """
 
 FAQ_AGENT_SYSTEM_PROMPT_FINAL: str = f"""{GENERAL_SYSTEM_PROMPT}
@@ -103,5 +111,7 @@ SHOTS_OPEN
 {SHOT_3}
 
 {SHOT_4}
+
+{SHOT_5}
 SHOTS_END
 """

@@ -51,6 +51,11 @@ class AgentName(str, Enum):
     START = START  # special value to indicate the start of the flow
 
 
+class RedirectTo(BaseModel):
+    screen: str
+    message: str
+
+
 class AgentResponse(BaseModel):
     """Structured response from an agent in the multi-agent system after the all processing is done, including the guardrails."""
 
@@ -59,6 +64,7 @@ class AgentResponse(BaseModel):
     blocked_reason: str | None = None
     agent_trace: list[str] = []
     report_url: str | None = None
+    redirect_to: RedirectTo | None = None
 
 class ConversationPreview(BaseModel):
     """A thread as it appears in the conversation list: id, when it was last
@@ -146,6 +152,7 @@ class State(MessagesState):
     # faq_agent
     answer: str | None
     sources: list[str]
+    redirect_to: RedirectTo | None
 
     # report_agent
     report_html: str | None

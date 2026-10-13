@@ -257,6 +257,7 @@ class MultiAgentService(IMultiAgentService):
                 "pii_map": {},
                 "answer": None,
                 "sources": [],
+                "redirect_to": None,
                 "report_html": None,
                 "predictions": [],
                 "inventory_answer": None,
@@ -320,6 +321,7 @@ class MultiAgentService(IMultiAgentService):
             blocked = end_state["blocked"],
             blocked_reason = end_state["blocked_reason"],
             agent_trace = end_state["called_agents"],
+            redirect_to = end_state.get("redirect_to"),
         )
 
     async def create_disposal_report(self, user_id: UUID, disposal_id: str, authorization: str) -> str:

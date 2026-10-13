@@ -5,7 +5,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-from multi_agent.entity import Role
+from multi_agent.entity import RedirectTo, Role
 
 
 class ProcessMessageRequest(BaseModel):
@@ -36,6 +36,7 @@ class ProcessMessageResponse(BaseModel):
     blocked_reason: str | None = None
     agent_trace: list[str] = []
     report_url: str | None = None
+    redirect_to: RedirectTo | None = None
 
 
 class ConversationPreviewResponse(BaseModel):

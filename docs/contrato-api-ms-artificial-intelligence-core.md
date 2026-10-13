@@ -103,7 +103,8 @@ curl -X POST "https://<host>/api/v1/multi-agent/process-message" \
   "blocked": false,
   "blocked_reason": null,
   "agent_trace": ["guardrail_in", "orchestrator", "faq", "formatter", "judge", "guardrail_out"],
-  "report_url": null
+  "report_url": null,
+  "redirect_to": {"screen": "Scan", "message": "Escanear código de barras"}
 }
 ```
 
@@ -114,6 +115,7 @@ curl -X POST "https://<host>/api/v1/multi-agent/process-message" \
 | `blocked_reason` | string \| null | Motivo em linguagem natural quando `blocked`. |
 | `agent_trace` | string[] | Nomes dos nós do grafo que rodaram neste turno (ordem de execução). Ver **Enums**. Não usar para UI de produto; é telemetria. |
 | `report_url` | string \| null | **Sempre `null` neste endpoint.** O chat **não** sobe PDF. PDF de descarte é `POST /api/v1/reports`. |
+| `redirect_to` | `{screen, message}` \| null | Atalho abaixo da mensagem. `screen` é o protocolo de encaminhamento (rota Android `Route.kt` sem prefixo, PascalCase). `message` é a mensagem de exibição no componente. Vem do FAQ. Fora do FAQ, inválido ou ausente: `null`. |
 
 Pergunta e resposta são gravadas **juntas, só quando o turno inteiro termina**. Nada é gravado se o fluxo parou no `guardrail_in` (`blocked` e `orchestrator` ausente do `agent_trace`) ou se o turno falhou (`502`/`503`); nesses casos a mensagem também sai do histórico usado nos próximos turnos.
 

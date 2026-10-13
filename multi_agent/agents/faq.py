@@ -9,10 +9,10 @@ from typing import Any
 
 from config.environments import Environments
 
-from ..entity import State, AgentName, GraphNodeFunc
+from ..entity import State, AgentName, GraphNodeFunc, RedirectTo
 from .message_utils import parse_json_message, request_with_history
 from logger.logger import Logger
-from pydantic import SecretStr
+from pydantic import SecretStr, ValidationError
 
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_qdrant import QdrantVectorStore
@@ -92,6 +92,16 @@ def make_faq_func(faq_agent: CompiledStateGraph) -> GraphNodeFunc:
             "called_agents": [AgentName.FAQ_AGENT],
             "answer": formated_response["answer"],
             "sources": formated_response["sources"],
+            "redirect_to": _redirect_to(formated_response.get("redirect_to")),
         }
 
     return faq_func
+
+
+def _redirect_to(raw: Any) -> RedirectTo | None:
+    if not raw:
+        return None
+    try:
+        return RedirectTo.model_validate(raw)
+    except ValidationError:
+        return None
