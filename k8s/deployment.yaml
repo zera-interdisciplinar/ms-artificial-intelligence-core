@@ -147,3 +147,13 @@ spec:
               key: ADMIN_CORE_API_KEY
         - name: SELF_MCP_URL
           value: "https://www.zeratech.online/ai-core"
+        - name: LANGSMITH_TRACING
+          value: "true"
+        - name: LANGSMITH_PROJECT
+          value: "zera"
+        - name: LANGSMITH_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: ms-artificial-intelligence-core-secrets
+              key: LANGSMITH_API_KEY
+              optional: true

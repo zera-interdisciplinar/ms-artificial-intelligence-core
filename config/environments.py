@@ -27,6 +27,11 @@ class Environments:
     LLM_FAST_MODEL: str
     LLM_FALLBACK_MODEL: str
 
+    # LangSmith (LangGraph traces when LANGSMITH_TRACING is true)
+    LANGSMITH_API_KEY: str | None
+    LANGSMITH_PROJECT: str
+    LANGSMITH_TRACING: bool
+
     # Database
     MONGO_URI: str
     REDIS_URL: str
@@ -78,6 +83,16 @@ class Environments:
         self.LLM_MODEL = os.getenv("LLM_MODEL", "gemini-3.5-flash")
         self.LLM_FAST_MODEL = os.getenv("LLM_FAST_MODEL", "gemini-3.5-flash-lite")
         self.LLM_FALLBACK_MODEL = os.getenv("LLM_FALLBACK_MODEL", "openai/gpt-oss-120b")
+
+        # LangSmith reads these from os.environ on graph.invoke; keep them in sync.
+        self.LANGSMITH_API_KEY = os.getenv("LANGSMITH_API_KEY")
+        self.LANGSMITH_PROJECT = os.getenv("LANGSMITH_PROJECT", "ms-artificial-intelligence-core")
+        self.LANGSMITH_TRACING = os.getenv("LANGSMITH_TRACING", "false").lower() in ("1", "true", "yes")
+        if self.LANGSMITH_TRACING:
+            os.environ["LANGSMITH_TRACING"] = "true"
+            os.environ["LANGSMITH_PROJECT"] = self.LANGSMITH_PROJECT
+            if self.LANGSMITH_API_KEY:
+                os.environ["LANGSMITH_API_KEY"] = self.LANGSMITH_API_KEY
 
         # Database
         self.MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
