@@ -5,6 +5,9 @@ from typing import Any
 
 _FIELD_LIMIT = 400
 _SUMMARY_LIMIT = 1800
+_REPORT_LOGO_URL = (
+    "https://gxasqxpqfvcjswxtkjxr.supabase.co/storage/v1/object/public/zera-reports/zera_logo.png"
+)
 
 
 def _text(value: Any, limit: int = _FIELD_LIMIT) -> str:
@@ -82,7 +85,8 @@ def render_quote_report(data: dict) -> str:
   h1, p, li, td {{ overflow-wrap: anywhere; word-break: break-word; }}
   .top {{ width: 100%; border-collapse: collapse; margin-bottom: 16px; }}
   .top td {{ vertical-align: middle; }}
-  .brand {{ font-size: 26px; font-weight: 800; letter-spacing: 1px; width: 90px; }}
+  .brand {{ width: 120px; }}
+  .brand img {{ display: block; max-height: 40px; width: auto; }}
   .rule {{ width: 2px; background: #111; }}
   .title {{ padding-left: 12px; }}
   .title h1 {{ margin: 0; font-size: 18px; }}
@@ -111,7 +115,7 @@ def render_quote_report(data: dict) -> str:
 <body>
 <table class="top">
   <tr>
-    <td class="brand">ZERA</td>
+    <td class="brand"><img src="{_REPORT_LOGO_URL}" alt="Zera" /></td>
     <td class="rule"></td>
     <td class="title">
       <h1>Cotação de equipamentos</h1>

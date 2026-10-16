@@ -53,8 +53,6 @@ spec:
           value: "8000"
         - name: APP_HOST
           value: "0.0.0.0"
-        - name: FAQ_PDF_PATH
-          value: "multi_agent/agents/data/faq.pdf"
         - name: PREDICT_MODEL_MCP_URL
           valueFrom:
             secretKeyRef:
@@ -112,6 +110,21 @@ spec:
             secretKeyRef:
               name: ms-artificial-intelligence-core-secrets
               key: SUPABASE_BUCKET_NAME
+        - name: QDRANT_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: ms-artificial-intelligence-core-secrets
+              key: QDRANT_API_KEY
+        - name: QDRANT_CLUSTER_URL
+          valueFrom:
+            secretKeyRef:
+              name: ms-artificial-intelligence-core-secrets
+              key: QDRANT_CLUSTER_URL
+        - name: QDRANT_COLLECTION
+          valueFrom:
+            secretKeyRef:
+              name: ms-artificial-intelligence-core-secrets
+              key: QDRANT_COLLECTION
         - name: MS_INVENTORY_MCP_URL
           valueFrom:
             secretKeyRef:
@@ -134,3 +147,13 @@ spec:
               key: ADMIN_CORE_API_KEY
         - name: SELF_MCP_URL
           value: "https://www.zeratech.online/ai-core"
+        - name: LANGSMITH_TRACING
+          value: "true"
+        - name: LANGSMITH_PROJECT
+          value: "zera"
+        - name: LANGSMITH_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: ms-artificial-intelligence-core-secrets
+              key: LANGSMITH_API_KEY
+              optional: true

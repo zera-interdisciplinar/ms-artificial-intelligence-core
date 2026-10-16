@@ -11,6 +11,8 @@ myLogger = Logger()
 myLogger.Info("Booting up ms-artificial-intelligence-core service")
 
 envs = Environments()
+if envs.LANGSMITH_TRACING:
+    myLogger.Info(f"LangSmith tracing enabled project={envs.LANGSMITH_PROJECT}")
 
 redis = Redis.from_url(envs.REDIS_URL)
 multi_agent_service, admin_core_client = build_service(envs, myLogger, redis)

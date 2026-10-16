@@ -15,7 +15,17 @@ from langgraph.graph.state import CompiledStateGraph
 
 from logger.logger import Logger
 
-from .entity import AgentName, AgentResponse, ConversationPage, DisposalReport, Message, Role, State, UserPreferences
+from .entity import (
+    AgentName,
+    AgentResponse,
+    BLOCKED_USER_MESSAGE,
+    ConversationPage,
+    DisposalReport,
+    Message,
+    Role,
+    State,
+    UserPreferences,
+)
 from .exception import MultiAgentServiceNotSetupException, UnitMismatchException
 from .graph import build_graph
 from .multi_agent import IMultiAgentRepository, IMultiAgentService, IPdfRenderer, IStorageService, IUnitResolver
@@ -257,6 +267,7 @@ class MultiAgentService(IMultiAgentService):
                 "pii_map": {},
                 "answer": None,
                 "sources": [],
+                "redirect_to": None,
                 "report_html": None,
                 "predictions": [],
                 "inventory_answer": None,
@@ -286,10 +297,10 @@ class MultiAgentService(IMultiAgentService):
         # is saved. blocked=True set later on (orchestrator's unclassified intent,
         # guardrail_out) still produces a turn worth saving.
         stopped_at_guardrail_in = end_state["blocked"] and AgentName.ORCHESTRATOR not in end_state["called_agents"]
+        content = BLOCKED_USER_MESSAGE if end_state["blocked"] else (end_state["final_response"] or "")
 
         if not stopped_at_guardrail_in:
             masked = next(m for m in end_state["messages"] if m.id == user_message_id)
-            assistant_content = end_state["final_response"] or end_state["blocked_reason"] or ""
 
             # question and answer are saved together, only once the whole turn succeeded
             await asyncio.to_thread(self.repository.save_message, Message(
@@ -304,22 +315,23 @@ class MultiAgentService(IMultiAgentService):
                 user_id=user_id,
                 thread_id=thread_id,
                 role=Role.ASSISTANT,
-                content=assistant_content,
+                content=content,
                 agent=AgentName.GUARDRAIL_OUT,
                 created_at=datetime.now(timezone.utc),
             ))
 
             # feeds the assistant's reply back into the checkpoint so the orchestrator
             # can resolve conversational references on the next turn.
-            await self.compiled_graph.aupdate_state(config, {"messages": [AIMessage(content=assistant_content)]})
+            await self.compiled_graph.aupdate_state(config, {"messages": [AIMessage(content=content)]})
 
         self.logger.Info(f"Finished processing message for user_id: {user_id}, thread_id: {thread_id}")
 
         return AgentResponse(
-            content = end_state["final_response"] or end_state["blocked_reason"] or "",
+            content = content,
             blocked = end_state["blocked"],
             blocked_reason = end_state["blocked_reason"],
             agent_trace = end_state["called_agents"],
+            redirect_to = end_state.get("redirect_to"),
         )
 
     async def create_disposal_report(self, user_id: UUID, disposal_id: str, authorization: str) -> str:

@@ -24,8 +24,8 @@ python-dotenv
 pytest
 pytest-cov
 
-# pdf --> FAISS
-faiss-cpu
+# pdf --> Qdrant
+langchain-qdrant
 pypdf
 
 # supabase storage (to save and load files)

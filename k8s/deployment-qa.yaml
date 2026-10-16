@@ -100,8 +100,21 @@ spec:
             secretKeyRef:
               name: ms-artificial-intelligence-core-secrets
               key: SUPABASE_BUCKET_NAME
-        - name: FAQ_PDF_PATH
-          value: "multi_agent/agents/data/faq.pdf"
+        - name: QDRANT_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: ms-artificial-intelligence-core-secrets
+              key: QDRANT_API_KEY
+        - name: QDRANT_CLUSTER_URL
+          valueFrom:
+            secretKeyRef:
+              name: ms-artificial-intelligence-core-secrets
+              key: QDRANT_CLUSTER_URL
+        - name: QDRANT_COLLECTION
+          valueFrom:
+            secretKeyRef:
+              name: ms-artificial-intelligence-core-secrets
+              key: QDRANT_COLLECTION
         - name: PREDICT_MODEL_MCP_URL
           valueFrom:
             secretKeyRef:
@@ -134,3 +147,13 @@ spec:
               key: ADMIN_CORE_API_KEY
         - name: SELF_MCP_URL
           value: "https://www.zeratech.online/qa/ai-core"
+        - name: LANGSMITH_TRACING
+          value: "true"
+        - name: LANGSMITH_PROJECT
+          value: "zera-qa"
+        - name: LANGSMITH_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: ms-artificial-intelligence-core-secrets
+              key: LANGSMITH_API_KEY
+              optional: true

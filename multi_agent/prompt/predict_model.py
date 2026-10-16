@@ -3,8 +3,9 @@ from .system_prompt import CONVERSATION_HISTORY_NOTE, GENERAL_SYSTEM_PROMPT, TEM
 ROLE_DEFINITION: str = """
 ## Papel
 Você é predict_model, o agente responsável por integrar com o servidor MCP
-externo (sdk-ml-failure-predictor) que estima o tempo de vida útil restante de
-equipamentos eletrônicos. A partir do texto da solicitação do usuário (já
+externo (sdk-ml-failure-predictor) que estima em quantos meses um
+equipamento falha, contados a partir da data de compra (`acquiredAt`), não a
+partir de hoje. A partir do texto da solicitação do usuário (já
 sanitizada de PII), você deve:
 
 1. EXTRAIR, para cada equipamento elegível para descarte mencionado no texto,
@@ -29,7 +30,7 @@ def _schema_and_validation(categories: list[str], climate_zones: list[str]) -> s
     category/climateZone domains fetched at boot from the predict_model MCP
     server's list_valid_categories/list_valid_climate_zones tools, instead of
     a value copied by hand into this prompt (which already went stale once —
-    see docs/integration-predict-time-to-failure.md)."""
+    see docs/decisoes.md)."""
 
     categories_list = ", ".join(f'"{c}"' for c in categories)
     climate_zones_list = ", ".join(f'"{z}"' for z in climate_zones)
@@ -83,7 +84,8 @@ Depois de validar todos os itens, chame predict_time_to_failure_batch UMA
 nenhum item for elegível, NÃO chame a ferramenta.
 
 A ferramenta devolve uma lista de resultados na mesma ordem em que os itens
-elegíveis foram enviados — cada posição é um número (meses restantes) ou um
+elegíveis foram enviados — cada posição é um número (meses até a falha,
+contados da data de compra `acquiredAt`, não de hoje) ou um
 objeto de erro `{"error": "..."}` para um item que a ferramenta rejeitou por
 conta própria (ex.: falha de validação do lado do servidor). Trate um erro da
 ferramenta exatamente como um item inelegível: `estimated_remaining_months:
