@@ -110,9 +110,9 @@ curl -X POST "https://<host>/api/v1/multi-agent/process-message" \
 
 | Campo | Tipo | Descrição |
 |---|---|---|
-| `content` | string | Texto para exibir no chat. Se `blocked` e o fluxo parou cedo, pode ser o `blocked_reason` (ou string vazia). |
+| `content` | string | Texto para exibir no chat. Se `blocked`, é a mensagem padrão de recusa (não o código interno do guardrail). |
 | `blocked` | bool | `true` se guardrail/orquestrador recusou (off-topic, PII, intenção não classificada, etc.). Ainda assim o HTTP é **200**. |
-| `blocked_reason` | string \| null | Motivo em linguagem natural quando `blocked`. |
+| `blocked_reason` | string \| null | Motivo interno quando `blocked` (categoria do guardrail). |
 | `agent_trace` | string[] | Nomes dos nós do grafo que rodaram neste turno (ordem de execução). Ver **Enums**. Não usar para UI de produto; é telemetria. |
 | `report_url` | string \| null | **Sempre `null` neste endpoint.** O chat **não** sobe PDF. PDF de descarte é `POST /api/v1/reports`. |
 | `redirect_to` | `{screen, message}` \| null | Atalho abaixo da mensagem. `screen` é o protocolo de encaminhamento (rota Android `Route.kt` sem prefixo, PascalCase). `message` é a mensagem de exibição no componente. Vem do FAQ. Fora do FAQ, inválido ou ausente: `null`. |

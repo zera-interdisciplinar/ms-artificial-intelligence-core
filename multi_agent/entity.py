@@ -56,6 +56,13 @@ class RedirectTo(BaseModel):
     message: str
 
 
+# shown in `content` when blocked; `blocked_reason` keeps the LLM category
+BLOCKED_USER_MESSAGE = (
+    "Não posso seguir com essa mensagem. Reformule o pedido sem conteúdo "
+    "inapropriado, dados pessoais ou instruções para ignorar as regras do sistema."
+)
+
+
 class AgentResponse(BaseModel):
     """Structured response from an agent in the multi-agent system after the all processing is done, including the guardrails."""
 
