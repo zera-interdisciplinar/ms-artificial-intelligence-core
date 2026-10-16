@@ -1,82 +1,50 @@
 # Projeto Zera — Overview
 
-## Descrição Geral
-O **Zera** é um sistema corporativo de gestão e controle de lixo eletrônico, inicialmente voltado para o Instituto J&F / JBS.  
-Ele organiza inventário de equipamentos eletrônicos, gera códigos de barras para rastreabilidade e classifica itens em:
-- reutilizáveis  
-- aproveitáveis para peças/upgrades  
-- descartáveis  
+Panorama da plataforma, alinhado à wiki do Confluence (espaço Backend): [Zera Back-end v1](https://zerainterdisciplinar.atlassian.net/wiki/spaces/Backend/pages/55803906) e [Zera Android App v1](https://zerainterdisciplinar.atlassian.net/wiki/spaces/Backend/pages/63537175). O detalhe de agentes deste repositório está em [this-project-overview.md](this-project-overview.md).
 
-Itens descartáveis são monitorados com alertas de “lote crítico” e relatórios automatizados para empresas recicladoras.
+## O que é
 
----
+O Zera gerencia o ciclo de vida de equipamentos eletrônicos **por unidade** de uma organização: cadastro, estoque, manutenção, descarte e alertas de regra, com previsão de falha. O app Android é o ponto operacional de operários e gestores. Este repositório é o serviço de IA (chat e PDF de descarte).
 
-## Funcionalidades Principais
-- Cadastro manual de itens com especificações técnicas  
-- Geração e leitura de códigos de barras  
-- Triagem de equipamentos (reuso, aproveitamento, descarte)  
-- Relatórios consolidados para gestores e recicladoras  
-- Checklist de periculosidade (ex.: baterias)  
-- Acompanhamento de manutenção preventiva com base em regras simples:
-  - tempo médio de vida útil  
-  - quantidade de manutenções anteriores  
-  - estado atual do equipamento  
-  - desgaste estimado  
-  - frequência de utilização  
-  - histórico de substituição de peças  
+## Serviços
 
----
+| Serviço | Responsabilidade |
+|---|---|
+| ms-administrative-core | Identidade: organizações, unidades, usuários, convites, JWT, alertas entregues ao usuário |
+| ms-inventory | Categorias, modelos, itens, eventos, descartes, regras de alerta, painéis e tools MCP |
+| Este repositório | Assistente (FAQ, inventário, previsão, texto de relatório) e PDF de descarte |
+| sdk-ml-failure-predictor | Meses restantes até a falha. O ms-inventory chama num job diário; o app só lê `predictedFailureDate` |
 
-## Hierarquia de Identificação
-1. **Categoria** — tipo geral (Notebook, Monitor, Bateria, etc.)  
-2. **Modelo** — especificações técnicas (fabricante, versão, configuração)  
-3. **Produto** — item físico individual (ex.: notebook do João)  
+Os serviços de back-end não leem o banco um do outro. O acoplamento é o JWT que o admin-core emite e o inventário valida. A unidade é o limite de isolamento: recurso de outra unidade, visto daqui, não existe (`404`).
 
----
+## Hierarquia
 
-## Perfis de Usuário
-- **Funcionário:** triagem, escaneamento, inventário, manutenção, criação de modelos  
-- **Gestor:** relatórios, alertas, análises preventivas, criação de categorias e modelos  
-- **Administrador:** acesso total, gestão de usuários, parâmetros, confirmação de descartes, envio de relatórios
+1. **Categoria** — recorte do catálogo da unidade (Notebook, Televisão).
+2. **Modelo** — um modelo dessa categoria, com garantia, vida útil, materiais e peso (MacBook Air M2).
+3. **Item** — uma unidade física, com código de barras, estado e histórico.
 
----
+`displayCode` é um código curto de 6 dígitos na UI, único por unidade. Não é o código de barras.
 
-## Objetivos
-- Melhorar administração do lixo eletrônico  
-- Reduzir desperdício e descarte prematuro  
-- Facilitar reaproveitamento interno  
-- Garantir rastreabilidade e padronização  
-- Automatizar relatórios e comunicação com recicladoras  
-- Apoiar práticas alinhadas à ODS 12.4  
+## Papéis
 
----
+A v1 tem dois papéis no claim `role`: `EMPLOYEE` (operário) e `MANAGER` (gestor). Não há administrador.
 
-## Restrições
-- Cadastro inicial manual  
-- Impressão física obrigatória dos códigos de barras  
-- Sem sensores físicos ou IA avançada  
-- Dependência da correta utilização pelos funcionários  
+Leitura exige autenticação. O operário cadastra e edita itens e modelos. O gestor faz isso e ainda cuida de categorias, regras, aprovações, exclusões, convites e transferência de unidade. Cancelar um descarte é só do gestor.
 
----
+## Estados do item
 
-## Premissas
-- Descarte atual é manual e desorganizado  
-- Há acúmulo físico de lixo eletrônico  
-- Códigos de barras são viáveis e padronizados  
-- Manutenção preventiva pode reduzir descarte prematuro  
+Todo item nasce `DRAFT`. Submit do operário vai para `PENDING_APPROVAL`; submit do gestor vai direto para `IN_STOCK`. Os demais estados são `REJECTED`, `IN_MAINTENANCE`, `AWAITING_EVALUATION` e `DISPOSED`. A foto não é obrigatória para sair do rascunho. Cada transição grava um evento imutável.
 
----
+## Descarte e alertas
 
-## Riscos
-- Funcionários podem pular etapas ou não imprimir códigos  
-- Alertas podem ser ignorados  
-- Falhas humanas no cadastro comprometem previsões  
-- Resistência à adoção do processo  
+Descarte é registro do que **já aconteceu** (destino, local, data). Não há agendamento, nem catálogo próprio de recicladoras: o local vem de uma API externa e o sistema guarda `placeId` e `placeName`. O PDF do descarte sai deste serviço (`POST /api/v1/reports`).
 
----
+Alertas nascem de regras da unidade (quantidade em estoque, tempo parado, garantia, vida útil, intensidade de uso, falha prevista, entre outras). Toda unidade nasce com o conjunto padrão. O alerta é entregue pelo admin-core.
 
-## Monetização
-- Venda única ao Instituto J&F por R$ 10.000,00  
-- Custos estimados: R$ 1.912,30  
-- Lucro estimado: R$ 8.087,70 (divisão igualitária entre cinco integrantes)  
-- Aspectos legais: emissão via MEI, registro no INPI
+## Fora da v1
+
+- Agendar descarte futuro
+- Perfil de administrador
+- Galeria de várias fotos por item
+- Meta de reciclagem
+- O app chamar o serviço preditivo direto

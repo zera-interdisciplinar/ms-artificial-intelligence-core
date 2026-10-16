@@ -270,7 +270,7 @@ Nome do arquivo no storage: `disposal-{disposal_id}.pdf`. Falha de storage **nã
 |---|---|
 | `200` | URL nova ou já persistida. |
 | `401` | Bearer sem usuário legível. |
-| `403` | Unidade do usuário irresolvível, ou o relatório já gravado é de outra unidade. |
+| `403` | Unidade irresolvível ou descarte de outra unidade. Body: `{"detail": "disposal does not belong to this user's unit"}`. |
 | `422` | Body inválido (`disposal_id` vazio) ou `Authorization` ausente. |
 
 ### 3.2 `GET /api/v1/reports/{disposal_id}` — URL já gerada
@@ -300,7 +300,7 @@ curl -X GET "https://<host>/api/v1/reports/42" \
 | Status | Quando |
 |---|---|
 | `200` | Relatório existe e é da unidade do usuário. |
-| `403` | Unidade do usuário irresolvível. |
+| `403` | Unidade irresolvível. Body: `{"detail": "the user's unit cannot be resolved"}`. |
 | `404` | Nunca gerado, ou é de outra unidade (não revela qual). Body: `{"detail": "disposal report not found"}`. |
 
 Fluxo típico na UI: após concluir um descarte, `POST /reports` e abrir `report_url`. Reabrir a tela: `GET /reports/{disposal_id}`; `404` → ainda não gerado, chamar o POST.

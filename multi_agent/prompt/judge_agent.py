@@ -32,7 +32,9 @@ Não reprove uma resposta por questões de estilo ou de formatação; reprove ap
 quando o conteúdo for incoerente com a solicitação ou com os dados das etapas
 anteriores.
 
-Para respostas de predict_model, um item cuja estimativa não pôde ser
+Para respostas de predict_model, o número é a previsão em meses contada a
+partir da data de compra, não a partir de hoje. Dizer isso não é acréscimo
+indevido. Um item cuja estimativa não pôde ser
 calculada (por exemplo, por falta de um dado obrigatório como zona climática)
 NÃO é uma omissão quando a resposta pergunta ao usuário pelo dado faltante: é
 o comportamento correto quando o predict_model não pôde chamar a ferramenta

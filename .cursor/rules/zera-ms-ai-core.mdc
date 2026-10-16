@@ -21,4 +21,4 @@ API FastAPI + LangGraph (guardrail in/out, orchestrator, faq, report, predict_mo
 - Hexagonal: portas em `multi_agent/multi_agent.py`; adaptadores concretos só em `app/api/composition.py`; topologia em `multi_agent/graph.py`.
 - Testes `test_*.py` ao lado do código testado.
 
-Spec: `docs/this-project-overview.md`. Integração predict: `docs/integration-predict-time-to-failure.md`.
+Spec: `docs/this-project-overview.md`. Decisões e integração do preditor: `docs/decisoes.md`.

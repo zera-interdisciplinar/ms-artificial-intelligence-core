@@ -1,5 +1,7 @@
 # Relatório de descarte Implementation Plan
 
+> Implementado. O contrato vigente é [`docs/contrato-api-ms-artificial-intelligence-core.md`](../../contrato-api-ms-artificial-intelligence-core.md): o usuário vem do Bearer, não do body. Este arquivo é o plano da época, não a spec.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Persistir no storage só o relatório gerado para um descarte, e expor a URL desse PDF por `disposal_id`.
