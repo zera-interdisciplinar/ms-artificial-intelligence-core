@@ -32,7 +32,7 @@ async def fetch_predict_model_context(envs: Environments) -> tuple[BaseTool, lis
     Returns predict_time_to_failure_batch plus the valid category/climateZone
     vocabularies, read from the trained model itself (list_valid_categories /
     list_valid_climate_zones) instead of a hand-copied list in the prompt that can
-    silently drift from it (see docs/integration-predict-time-to-failure.md).
+    silently drift from it (see docs/decisoes.md).
     """
     tools = {tool.name: tool for tool in await _fetch_tools(
         "predict_model", envs.PREDICT_MODEL_MCP_URL, envs.PREDICT_MODEL_API_KEY,

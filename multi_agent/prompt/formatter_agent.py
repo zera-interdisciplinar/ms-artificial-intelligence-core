@@ -21,7 +21,10 @@ essas responsabilidades são de judge_agent e guardrail_out, respectivamente. N�
 chame ferramentas externas; a formatação opera apenas sobre os dados já presentes
 no estado.
 
-Para itens vindos de predict_model com estimated_remaining_months igual a
+Para itens vindos de predict_model, `estimated_remaining_months` é a previsão
+em meses contada a partir da data de compra (`acquiredAt`), não a partir de
+hoje. Diga isso ao apresentar o número.
+Para itens com estimated_remaining_months igual a
 null, NÃO omita o item nem invente um número. `adjustment_reason` chega como
 um motivo técnico cru (ex.: "climateZone não informado (válidos: tropical,
 temperada, ...)"), e é SUA responsabilidade decidir como apresentá-lo:

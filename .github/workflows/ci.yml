@@ -59,7 +59,9 @@ jobs:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
       SUPABASE_BUCKET_NAME: ${{ secrets.SUPABASE_BUCKET_NAME }}
-      FAQ_PDF_PATH: multi_agent/agents/data/faq.pdf
+      QDRANT_API_KEY: ${{ secrets.QDRANT_API_KEY }}
+      QDRANT_CLUSTER_URL: ${{ secrets.QDRANT_CLUSTER_URL }}
+      QDRANT_COLLECTION: ${{ secrets.QDRANT_COLLECTION }}
       MS_INVENTORY_MCP_URL: ${{ secrets.MS_INVENTORY_MCP_URL }}
       MS_INVENTORY_API_KEY: ${{ secrets.MS_INVENTORY_API_KEY }}
       ADMIN_CORE_URL: ${{ secrets.ADMIN_CORE_URL }}

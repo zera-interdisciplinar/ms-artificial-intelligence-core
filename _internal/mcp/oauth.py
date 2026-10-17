@@ -3,7 +3,9 @@ OAuth authorization server for the MCP connector.
 
 Claude does not have the worker's JWT. It discovers this server from the 401,
 opens /login, and stores the access token the admin-core already issues.
-The refresh token from admin-core stays here. ask_zera still reads the Bearer.
+The refresh token from admin-core stays here, with the same lifetime as the
+access token, so Claude cannot stay "connected" after the platform login
+expires. ask_zera still reads the Bearer.
 """
 
 import html
@@ -35,7 +37,6 @@ from logger.logger import Logger
 
 _CODE_TTL_SECONDS = 60
 _PENDING_TTL_SECONDS = 10 * 60
-_REFRESH_TTL_SECONDS = 30 * 24 * 60 * 60
 _KEY_PREFIX = "mcp:oauth"
 _M = TypeVar("_M", bound=BaseModel)
 
@@ -48,6 +49,7 @@ class ZeraAuthorizationCode(AuthorizationCode):
 
 class ZeraRefreshToken(RefreshToken):
     admin_refresh_token: str
+    resource: str | None = None
 
 
 class _PendingLogin(BaseModel):
@@ -78,6 +80,16 @@ class ZeraOAuthProvider(
 
     async def _drop(self, kind: str, key: str) -> None:
         await self.store.delete(f"{_KEY_PREFIX}:{kind}:{key}")
+
+    async def _load_unexpired(self, kind: str, key: str, model: type[_M]) -> _M | None:
+        stored = await self._get(kind, key, model)
+        if stored is None:
+            return None
+        expires_at = getattr(stored, "expires_at", None)
+        if expires_at is None or expires_at < time.time():
+            await self._drop(kind, key)
+            return None
+        return stored
 
     async def has_pending(self, txn: str) -> bool:
         return await self._get("pending", txn, _PendingLogin) is not None
@@ -153,7 +165,7 @@ class ZeraOAuthProvider(
     async def load_refresh_token(
         self, client: OAuthClientInformationFull, refresh_token: str
     ) -> ZeraRefreshToken | None:
-        return await self._get("refresh", refresh_token, ZeraRefreshToken)
+        return await self._load_unexpired("refresh", refresh_token, ZeraRefreshToken)
 
     async def exchange_refresh_token(
         self,
@@ -163,6 +175,7 @@ class ZeraOAuthProvider(
     ) -> OAuthToken:
         tokens = await self.admin_core.refresh(refresh_token.admin_refresh_token)
         if tokens is None:
+            await self._drop("refresh", refresh_token.token)
             raise TokenError("invalid_grant", "refresh rejected")
         await self._drop("refresh", refresh_token.token)
         return await self._issue(
@@ -172,11 +185,11 @@ class ZeraOAuthProvider(
             access_token=tokens["accessToken"],
             admin_refresh=tokens.get("refreshToken") or refresh_token.admin_refresh_token,
             expires_in=int(tokens["expiresIn"]),
-            resource=None,
+            resource=refresh_token.resource,
         )
 
     async def load_access_token(self, token: str) -> AccessToken | None:
-        return await self._get("access", token, AccessToken)
+        return await self._load_unexpired("access", token, AccessToken)
 
     async def revoke_token(self, token: AccessToken | ZeraRefreshToken) -> None:
         await self._drop("access" if isinstance(token, AccessToken) else "refresh", token.token)
@@ -192,11 +205,12 @@ class ZeraOAuthProvider(
         resource: str | None,
     ) -> OAuthToken:
         handle = secrets.token_urlsafe(32)
+        expires_at = int(time.time()) + expires_in
         await self._put("access", access_token, AccessToken(
             token=access_token,
             client_id=client_id,
             scopes=scopes,
-            expires_at=int(time.time()) + expires_in,
+            expires_at=expires_at,
             resource=resource,
             subject=subject,
         ), expires_in)
@@ -204,9 +218,11 @@ class ZeraOAuthProvider(
             token=handle,
             client_id=client_id,
             scopes=scopes,
+            expires_at=expires_at,
+            resource=resource,
             subject=subject,
             admin_refresh_token=admin_refresh,
-        ), _REFRESH_TTL_SECONDS)
+        ), expires_in)
         return OAuthToken(
             access_token=access_token,
             expires_in=expires_in,

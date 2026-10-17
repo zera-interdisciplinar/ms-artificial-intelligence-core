@@ -9,6 +9,7 @@ from multi_agent.entity import (
     AgentName,
     AgentResponse,
     Message,
+    RedirectTo,
     Role,
     State,
 )
@@ -52,6 +53,7 @@ class TestAgentResponse:
         assert response.blocked is False
         assert response.blocked_reason is None
         assert response.agent_trace == []
+        assert response.redirect_to is None
 
     def test_accepts_a_blocked_response(self):
         response = AgentResponse(
@@ -166,6 +168,7 @@ class TestState:
             "pii_map": {},
             "answer": "três perfis",
             "sources": ["zera_overview.pdf#p2"],
+            "redirect_to": RedirectTo(screen="Profile", message="Abrir Perfil"),
             "report_html": None,
             "predictions": [],
             "inventory_answer": None,
@@ -191,6 +194,7 @@ class TestState:
             "pii_map",
             "answer",
             "sources",
+            "redirect_to",
             "report_html",
             "predictions",
             "inventory_answer",

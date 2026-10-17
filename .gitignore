@@ -27,6 +27,9 @@ Thumbs.db
 # ambiente virtual
 zera-ai-core/
 
+# local FAQ source (not shipped in the image)
+/local/
+
 # AI context
 .claude
 CLAUDE.md

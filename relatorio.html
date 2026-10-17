@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<title>Relatório de carga — IA Zera QA</title>
+<style>
+  body { font-family: Georgia, serif; color: #1a1a1a; max-width: 880px; margin: 32px auto; padding: 0 20px; line-height: 1.45; }
+  h1 { font-size: 1.6rem; margin-bottom: 0.2rem; }
+  h2 { font-size: 1.15rem; margin-top: 2rem; border-top: 1px solid #ddd; padding-top: 1rem; }
+  .meta { color: #444; font-family: system-ui, sans-serif; font-size: 0.92rem; }
+  table { border-collapse: collapse; width: 100%; font-family: system-ui, sans-serif; font-size: 0.92rem; margin: 0.8rem 0 1rem; }
+  th, td { border: 1px solid #ccc; padding: 6px 8px; text-align: left; vertical-align: top; }
+  th { background: #f4f4f4; }
+  figure { margin: 1rem 0 1.4rem; }
+  img { width: 100%; height: auto; border: 1px solid #ddd; }
+  figcaption { font-family: system-ui, sans-serif; font-size: 0.82rem; color: #444; margin-top: 0.35rem; }
+  .note { background: #f7f5ef; padding: 10px 12px; font-family: system-ui, sans-serif; font-size: 0.9rem; }
+</style>
+</head>
+<body>
+
+<h1>Relatório de carga do serviço de IA</h1>
+<p class="meta">Ambiente QA · <code>https://www.zeratech.online/qa/ai-core</code> · projeto LangSmith <code>zera-qa</code><br>
+Janela útil: 15/10/2026, 08:31–08:38 (horário de Brasília; 11:31–11:38 UTC no log e no AI Studio).</p>
+
+<h2>O que foi feito</h2>
+<p>Cem usuários ativos foram sorteados em <code>user_account</code> no Postgres do admin-core, cada um com a própria unidade. Cada usuário manteve uma conversa, com espera de 12 a 35 segundos entre mensagens, e no máximo cinco chamadas ao mesmo tempo. Os turnos alternaram FAQ, inventário, predição de falha e relatório. O log do pod está em <code>script/log (2).log</code>.</p>
+<p>Antes dessa janela, às 08:27, houve 38 chamadas recusadas com HTTP 403. O admin-core respondeu 401 (token ainda sem assinatura) e o serviço não resolveu a unidade. Esses 38 pedidos ficam de fora dos números abaixo.</p>
+
+<h2>Volume e índice de erros</h2>
+<p>Contagem no log do serviço, só a janela das 08:31 às 08:38:</p>
+<table>
+  <tr><th>Resultado</th><th>Turnos</th><th>Fatia</th></tr>
+  <tr><td>HTTP 200 (turno concluído)</td><td>223</td><td>90,3%</td></tr>
+  <tr><td>HTTP 500</td><td>24</td><td>9,7%</td></tr>
+  <tr><td>Total</td><td>247</td><td>100%</td></tr>
+</table>
+<p>Os 24 erros 500 são o mesmo incidente: o MCP de inventário em <code>/qa/inventory/mcp</code> respondeu <strong>429 Too Many Requests</strong>. O índice de erro do serviço nessa carga é <strong>9,7%</strong>. Não houve 401 nem 403 nessa janela.</p>
+<p>O judge quase não devolveu o turno: o log registra 3 retries (resposta de cotação/descarte no lugar do histórico de predição). Isso não aparece como erro HTTP.</p>
+<p>No LangSmith a taxa de erro do trace fica em zero até 08:32, sobe para cerca de 20% às 08:33, chega a cerca de 25% às 08:35 e volta a zero às 08:37. O AI Studio não mostra erro de API do Gemini. Os 24 HTTP 500 desta janela são só o 429 do MCP de inventário. No gráfico de tools a previsão de falha também sobe a taxa de erro, mas isso não vira esses 500. As chamadas de LLM no LangSmith ficam com erro zerado o tempo todo.</p>
+
+<h2>Latência</h2>
+<figure>
+  <img src="relatorio-assets/trace-count-latency.png" alt="Contagem e latência dos traces no LangSmith" />
+  <figcaption>Traces da raiz. Sucesso chega a cerca de 35 por minuto; erros ficam entre 7 e 9 no meio da janela. P50 da latência em 8–9 s; P99 entre 10 s e 14 s.</figcaption>
+</figure>
+<figure>
+  <img src="relatorio-assets/trace-error.png" alt="Taxa de erro dos traces" />
+  <figcaption>Taxa de erro do trace: pico perto de 25% às 08:35 e zero de novo às 08:37.</figcaption>
+</figure>
+<figure>
+  <img src="relatorio-assets/llm-calls.png" alt="Chamadas e latência do LLM" />
+  <figcaption>Chamadas de LLM: cerca de 240 por minuto, sem erro. P50 perto de 1 s; P99 até cerca de 2,9 s.</figcaption>
+</figure>
+<p>O tempo total de resposta, no trace raiz, fica em <strong>8–9 segundos na mediana</strong> e <strong>10–14 segundos no P99</strong>. O pico do P99 (cerca de 14 s às 08:34) coincide com o custo e com a taxa de erro. Cada chamada de modelo, sozinha, leva cerca de 1 s na mediana.</p>
+<figure>
+  <img src="relatorio-assets/runs-latency.png" alt="Contagem e latência por agente" />
+  <figcaption>Agentes no primeiro nível do trace: formatter, guardrail de entrada e saída, judge e orchestrator. Cada um fica entre cerca de 0,8 s e 1,15 s.</figcaption>
+</figure>
+<figure>
+  <img src="relatorio-assets/runs-error.png" alt="Taxa de erro por agente" />
+  <figcaption>Nenhum desses agentes registra erro na janela.</figcaption>
+</figure>
+<figure>
+  <img src="relatorio-assets/tools-count.png" alt="Contagem e latência por tool" />
+  <figcaption>Tools: <code>search_inventory</code> chega a cerca de 15 execuções por minuto. <code>retrieve_context</code> (FAQ) fica em 1,5–2,2 s. <code>predict_time_to_failure_batch</code> começa perto de 4,5 s e depois cai.</figcaption>
+</figure>
+<figure>
+  <img src="relatorio-assets/tools-error.png" alt="Taxa de erro por tool" />
+  <figcaption><code>search_inventory</code> e <code>failure_forecast</code> passam de 30% de erro entre 08:33 e 08:35. As outras tools ficam em zero.</figcaption>
+</figure>
+<p>O tempo total não é um agente lento. É a soma do caminho (dois guardrails, orquestrador, especialista, formatter e judge, cada um perto de 1 s) mais a tool. Os agentes não registram erro. No gráfico de tools, <code>search_inventory</code> e <code>failure_forecast</code> passam de 30% entre 08:33 e 08:35. Desses dois, só o 429 de <code>search_inventory</code> produz os 24 HTTP 500. FAQ (<code>retrieve_context</code>) fica em zero.</p>
+
+<h2>Tokens e custo observado</h2>
+<figure>
+  <img src="relatorio-assets/ai-studio.png" alt="Google AI Studio: solicitações, tokens e embeddings na janela do teste" />
+  <figcaption>Google AI Studio, 11:31–11:38 UTC. Flash-Lite carrega o grosso das chamadas; Flash entra nos especialistas.</figcaption>
+</figure>
+<figure>
+  <img src="relatorio-assets/cost.png" alt="Custo total e custo por trace" />
+  <figcaption>Custo total chega a cerca de US$ 0,52 por minuto às 08:34. Por trace, a mediana fica em torno de US$ 0,01 e o P99 em torno de US$ 0,045.</figcaption>
+</figure>
+<figure>
+  <img src="relatorio-assets/input-tokens.png" alt="Tokens de entrada" />
+  <figcaption>Entrada: até cerca de 780 mil tokens por minuto no total. Por trace, mediana estável em cerca de 20 mil; P99 chega a cerca de 46 mil.</figcaption>
+</figure>
+<figure>
+  <img src="relatorio-assets/output-tokens.png" alt="Tokens de saída" />
+  <figcaption>Saída: pico de cerca de 12 mil tokens por minuto. Por trace, mediana perto de 280 e P99 entre 500 e 780.</figcaption>
+</figure>
+<table>
+  <tr><th>Sinal</th><th>Leitura do gráfico</th></tr>
+  <tr><td>Traces com sucesso</td><td>pico de cerca de 35 por minuto</td></tr>
+  <tr><td>Chamadas de LLM</td><td>cerca de 240 por minuto, erro zero</td></tr>
+  <tr><td>Tokens de entrada</td><td>até ~780 mil/min; ~20 mil por trace na mediana</td></tr>
+  <tr><td>Tokens de saída</td><td>até ~12 mil/min; ~280 por trace na mediana</td></tr>
+  <tr><td>Custo total</td><td>cerca de US$ 0,30 a US$ 0,52 por minuto</td></tr>
+  <tr><td>Custo por trace</td><td>mediana ~US$ 0,01; P99 ~US$ 0,045</td></tr>
+  <tr><td>Chamadas Gemini (AI Studio)</td><td>pico ~220/min no Flash-Lite e ~30/min no Flash</td></tr>
+  <tr><td>Erros da API Gemini</td><td>nenhum na janela</td></tr>
+</table>
+<p>Flash-Lite é o modelo dos guardrails, do orquestrador, do relatório, do formatter e do judge. Flash aparece menos porque só FAQ e inventário usam o modelo maior. A mediana de 20 mil tokens de entrada por trace é o prompt desses agentes mais o histórico curto da conversa. O P99 de 46 mil é o turno em que o contexto cresce.</p>
+<p>O que foi debitado nesta carga, com os <strong>100 usuários</strong>, foi <strong>US$ 0,17</strong>. O eixo de dólar do LangSmith não é essa fatura.</p>
+<h2>Por que o LangSmith e o Gemini não mostram o mesmo dólar</h2>
+<p>Os dois veem os mesmos tokens. O preço, não. O LangSmith não consulta o billing do Google. Ele pega a contagem de tokens do trace e multiplica por uma tabela de preço que ele mesmo guarda, escolhida pelo nome do modelo (<code>gemini-3.5-flash</code> e <code>gemini-3.5-flash-lite</code>). Se esse nome não está na tabela, entra o preço de um modelo parecido que ele já conhece.</p>
+<p>A mediana de cerca de US$ 0,01 por trace, com ~20 mil tokens de entrada, dá cerca de <strong>US$ 0,50 por milhão de tokens</strong>. Isso é a ordem da tabela publicada do Flash da geração anterior (cerca de US$ 0,30 por milhão na entrada). Vezes as ~220 resoluções, o painel sugere mais de US$ 2 na janela. A soma visual do custo por minuto passa de US$ 3. As duas leituras do LangSmith combinam entre si. Nenhuma das duas é o débito.</p>
+<p>O Gemini cobrou US$ 0,17 pelos mesmos 100 usuários. Por resolução, US$ 0,000762. Pelos ~20 mil tokens de entrada da mediana, isso é cerca de <strong>US$ 0,04 por milhão de tokens</strong>, na ordem de dez vezes abaixo da tabela que o LangSmith aplicou. O AI Studio ainda avisa, no rodapé, que o gráfico de uso da API não é o extrato e pode atrasar vários minutos. O número que vale é o que foi debitado.</p>
+<p>Daqui para baixo o dinheiro é o débito de US$ 0,17. O LangSmith continua valendo para latência, erro e volume de tokens.</p>
+
+<h2>Para onde vai o token</h2>
+<p>A maior parte do token é entrada, e é isso que o fluxo multiagente precisa. Na mediana um trace lê cerca de 20 mil tokens e escreve 280: cada agente recebe o próprio prompt, e quem decide o rumo também recebe o histórico e o retorno da tool. A resposta que o usuário vê continua curta. No P99 a entrada sobe para cerca de 46 mil (2,3 vezes a mediana) e a saída para 500–780, quando a conversa e o payload da tool ficam mais longos. Esse volume é o custo de cada nó acertar o passo, não um desperdício de resposta.</p>
+<table>
+  <tr><th></th><th>Mediana por trace</th><th>P99 por trace</th><th>Pico por minuto</th></tr>
+  <tr><td>Entrada</td><td>~20 mil</td><td>~46 mil</td><td>~780 mil</td></tr>
+  <tr><td>Saída</td><td>~280</td><td>500–780</td><td>~12 mil</td></tr>
+  <tr><td>Chamadas de LLM</td><td>~7</td><td>~7</td><td>~240</td></tr>
+  <tr><td>Entrada por chamada</td><td>~3 mil</td><td>~6,5 mil</td><td>—</td></tr>
+  <tr><td>Saída por chamada</td><td>~40</td><td>~70–110</td><td>—</td></tr>
+</table>
+<p>Um turno que termina passa por guardrail de entrada, orquestrador, um especialista, formatter, judge e guardrail de saída. A mediana de ~7 chamadas de LLM não é um sétimo nó fixo: FAQ, inventário, relatório e predição são agentes com tool, então o mesmo nó chama o modelo de novo depois que a tool volta. O judge pode devolver o turno ao orquestrador uma vez; no log desta carga isso foi raro (3 retries).</p>
+<p>O modelo maior (<code>gemini-3.5-flash</code>) entra só na FAQ e no inventário. Guardrail de entrada e de saída, orquestrador, relatório, predição, formatter e judge usam <code>gemini-3.5-flash-lite</code>. Relatório e predição não são Flash. Se o orquestrador manda o inventário só para completar um pedido de predição, o inventário cola a resposta em <code>current_request</code> e o grafo segue para a predição antes do formatter: aí são dois especialistas no mesmo turno.</p>
+<p>Cada agente recebe o próprio prompt de sistema e uma única mensagem humana. O histórico não vai como lista de mensagens do chat. O orquestrador, a FAQ, o inventário, o relatório e a predição recebem o texto dos turnos anteriores (humano e assistente, sem a mensagem deste turno) mais as preferências, dentro dessa mensagem. O guardrail de entrada vê só a mensagem atual, já com PII mascarada. O formatter recebe um JSON com a resposta do especialista (texto, fontes, HTML do relatório, predições ou resposta de inventário), as preferências e o mesmo histórico em texto: é aqui que o retorno da tool é relido. O judge recebe só o pedido atual e a resposta formatada, sem histórico. O guardrail de saída recebe só a resposta formatada.</p>
+<p>No AI Studio, no pico, o Flash-Lite faz cerca de 220 chamadas por minuto e o Flash cerca de 30. Perto de <strong>88% das chamadas</strong> são o modelo barato, o que bate com o grafo: cinco ou seis nós em Lite, e Flash só quando o especialista é FAQ ou inventário. Trinta chamadas Flash para cerca de 35 traces nesse minuto quer dizer que a maior parte dos turnos caiu num desses dois, com no máximo uma segunda chamada Flash quando a tool do próprio agente continua. A saída não muda essa conta: 12 mil tokens de saída por minuto contra 780 mil de entrada.</p>
+<p>Em volume, 20 turnos por usuário por semana e a mediana desta carga (20 mil de entrada e 280 de saída) são a demanda. A cota da empresa, ainda não implementada, corta isso antes: 500 resoluções por mês no Profissional (cerca de 115 por semana) e 2.000 por mês no Empresarial (cerca de 462 por semana). Passou da cota, o modelo não é chamado, a menos que a empresa compre avulso.</p>
+<table>
+  <tr><th></th><th>Entrada / semana</th><th>Saída / semana</th></tr>
+  <tr><td>Demanda, 100 usuários</td><td>~40 milhões</td><td>~560 mil</td></tr>
+  <tr><td>Demanda, 1.000 usuários</td><td>~400 milhões</td><td>~5,6 milhões</td></tr>
+  <tr><td>O que a cota Profissional deixa passar</td><td>~2,3 milhões</td><td>~32 mil</td></tr>
+  <tr><td>O que a cota Empresarial deixa passar</td><td>~9,2 milhões</td><td>~129 mil</td></tr>
+</table>
+<p>As duas últimas linhas não mudam de 100 para 1.000 usuários: a cota é da empresa. Dentro dela, o orquestrador, os especialistas e o formatter seguem recebendo o histórico, que é o que mantém o turno coerente com a conversa. O judge e os dois guardrails não precisam desse histórico: um confere o pedido contra a resposta já formatada, os outros olham só a mensagem da vez.</p>
+
+<h2>Custo por resolução</h2>
+<p>Resolução, neste teste, é um turno HTTP 200: o grafo terminou e devolveu resposta. Foram <strong>223 resoluções</strong> em 247 tentativas.</p>
+<p>US$ 0,17 dividido pelas 223 resoluções dos 100 usuários dá <strong>US$ 0,000762 por resolução</strong>. Dividido pelas 247 tentativas, US$ 0,000688. O gráfico do LangSmith continua útil para ver forma (pico às 08:34, P99 mais caro que a mediana), não para o valor em dólares.</p>
+
+<h2>Cenário de 100 e 1.000 usuários por semana</h2>
+<p>O teste não é uma semana de uso. Foram <strong>100 usuários</strong> em cinco minutos de conversa (o log cobre 08:31–08:38), com no máximo cinco conversas ao mesmo tempo, e o débito foi US$ 0,17. Nessa janela cada usuário concluiu cerca de 2,2 turnos. A demanda abaixo é outra hipótese: <strong>20 turnos concluídos por usuário por semana</strong>. Isso não é o que a empresa pode gastar. A cota de crédito, ainda não implementada, é da empresa inteira: 500 resoluções por mês no Profissional e 2.000 por mês no Empresarial. O Free não tem cota.</p>
+<table>
+  <tr><th></th><th>100 usuários</th><th>1.000 usuários</th></tr>
+  <tr><td>Demanda, 20 turnos/semana</td><td>2.000/semana, 8.667/mês</td><td>20.000/semana, 86.670/mês</td></tr>
+  <tr><td>Gemini dessa demanda, sem teto</td><td>US$ 1,52/semana</td><td>US$ 15,24/semana</td></tr>
+  <tr><td>Cota Profissional</td><td>500/mês</td><td>500/mês</td></tr>
+  <tr><td>Gemini que fica no plano</td><td>R$ 1,93/mês</td><td>R$ 1,93/mês</td></tr>
+  <tr><td>Fora da cota Profissional</td><td>8.167/mês</td><td>86.170/mês</td></tr>
+  <tr><td>Cota Empresarial</td><td>2.000/mês</td><td>2.000/mês</td></tr>
+  <tr><td>Gemini que fica no plano</td><td>R$ 7,70/mês (R$ 92,40/ano)</td><td>R$ 7,70/mês (R$ 92,40/ano)</td></tr>
+  <tr><td>Fora da cota Empresarial</td><td>6.667/mês</td><td>84.670/mês</td></tr>
+</table>
+<p>O que passa da cota não entra no preço do plano: ou a empresa para, ou compra o avulso a R$ 0,01 por resolução. O Gemini do plano não cresce de 100 para 1.000 usuários. Quem cresce é o excedente.</p>
+<p>Essa conta é só o modelo, numa resolução HTTP 200. Infra não entra. Groq não entra (não houve fallback). O 429 também não: token gasto antes da falha não está nesses US$ 1,52. Se a semana tiver mais relatório e predição do que FAQ, o Flash cai e o custo por resolução desce, mas a cota continua em número de resoluções, não em dólar.</p>
+
+<h2>ROI sobre os planos</h2>
+<figure>
+  <img src="relatorio-assets/planos.png" alt="Planos Free, Profissional e Empresarial" />
+  <figcaption>Free R$ 0/mês, Profissional R$ 49,90/mês, Empresarial R$ 999,90/ano.</figcaption>
+</figure>
+<p>Free, Profissional e Empresarial são o preço do produto inteiro (scanner, estoque, relatórios, alertas, suporte). Não existe uma linha de receita só de IA, e o Free não inclui IA. O Profissional cobra por mês. O Empresarial cobra por ano. Não dá para tratar R$ 999,90/ano como uma mensalidade de R$ 83. No câmbio de 15/10/2026 (R$ 5,05), US$ 0,000762 vira <strong>R$ 0,00385 por resolução</strong>. A demanda segue 20 turnos por usuário por semana (86,67 por mês, 1.040 por ano). O Gemini que entra no preço do plano para na cota da empresa: 500 por mês no Profissional, 2.000 por mês no Empresarial. Abaixo da cota, o custo é a demanda. Acima, o plano paga só a cota.</p>
+<table>
+  <tr><th>Plano</th><th>Preço</th><th>Usuários</th><th>Demanda / mês</th><th>Dentro da cota</th><th>Gemini no plano</th><th>Gemini / preço</th></tr>
+  <tr><td>Free</td><td>R$ 0</td><td>—</td><td>não tem IA</td><td>0</td><td>R$ 0</td><td>—</td></tr>
+  <tr><td>Profissional</td><td>R$ 49,90/mês</td><td>1</td><td>87</td><td>87</td><td>R$ 0,334/mês</td><td>0,67%</td></tr>
+  <tr><td>Profissional</td><td>R$ 49,90/mês</td><td>10</td><td>867</td><td>500</td><td>R$ 1,93/mês</td><td>3,9%</td></tr>
+  <tr><td>Profissional</td><td>R$ 49,90/mês</td><td>30</td><td>2.600</td><td>500</td><td>R$ 1,93/mês</td><td>3,9%</td></tr>
+  <tr><td>Empresarial</td><td>R$ 999,90/ano</td><td>10</td><td>867</td><td>867</td><td>R$ 40/ano</td><td>4%</td></tr>
+  <tr><td>Empresarial</td><td>R$ 999,90/ano</td><td>30</td><td>2.600</td><td>2.000</td><td>R$ 92,40/ano</td><td>9,2%</td></tr>
+  <tr><td>Empresarial</td><td>R$ 999,90/ano</td><td>100</td><td>8.667</td><td>2.000</td><td>R$ 92,40/ano</td><td>9,2%</td></tr>
+</table>
+<p>Um usuário no Profissional e dez no Empresarial ainda cabem na cota, então o plano paga a demanda. Nos outros casos a demanda passa da cota e o plano paga só ela: 3,9% no Profissional e 9,2% no Empresarial. Sem cota, trinta usuários no Profissional levariam 20,1% do mês e cem no Empresarial levariam 40% do ano.</p>
+<p>No plano o retorno é o preço do produto. A margem é <code>(preço − Gemini da cota ou da demanda, o que for menor) / preço</code>. Infra não entra.</p>
+<table>
+  <tr><th>Plano</th><th>Preço</th><th>Gemini no plano</th><th>Sobra</th><th>Margem</th></tr>
+  <tr><td>Profissional, 1 usuário</td><td>R$ 49,90/mês</td><td>R$ 0,334</td><td>R$ 49,57</td><td>99,3%</td></tr>
+  <tr><td>Profissional, 10 ou 30</td><td>R$ 49,90/mês</td><td>R$ 1,93</td><td>R$ 47,97</td><td>96,1%</td></tr>
+  <tr><td>Empresarial, 10</td><td>R$ 999,90/ano</td><td>R$ 40</td><td>R$ 959,90</td><td>96,0%</td></tr>
+  <tr><td>Empresarial, 30 ou 100</td><td>R$ 999,90/ano</td><td>R$ 92,40</td><td>R$ 907,50</td><td>90,8%</td></tr>
+</table>
+
+<h2>Crédito por empresa</h2>
+<p>Isto não foi implementado. Não há crédito, teto nem cobrança de excedente no produto. O que segue é uma possibilidade, não um comportamento do sistema hoje.</p>
+<p>Hoje o uso de IA não tem teto e não tem preço próprio. Uma forma de não deixar esse custo crescer dentro do plano seria um crédito por empresa, só nos planos que já têm IA. O Free continuaria sem IA. Um crédito seria uma resolução e custa R$ 0,00385 para nós. Cobrar R$ 0,04 daria ROI de 939% em cima de um custo de menos de meio centavo. Isso é margem de um preço alto, não retorno do plano. O avulso desta proposta fica em R$ 0,01, pouco mais que o dobro do modelo: o pacote de 1.000 sai R$ 10, contra R$ 3,85 de Gemini.</p>
+<table>
+  <tr><th>Plano</th><th>IA</th><th>Créditos inclusos / mês</th><th>Custo Gemini da cota</th><th>Acima da cota</th></tr>
+  <tr><td>Free</td><td>não</td><td>0</td><td>R$ 0</td><td>não se vende crédito; o caminho é o Profissional</td></tr>
+  <tr><td>Profissional</td><td>sim, dentro dos R$ 49,90</td><td>500</td><td>R$ 1,93 (3,9% do plano)</td><td>R$ 0,01 por crédito, ou 1.000 por R$ 10</td></tr>
+  <tr><td>Empresarial</td><td>sim, dentro dos R$ 999,90/ano</td><td>2.000 por mês (24.000 no ano)</td><td>R$ 92,40/ano (9,2% de R$ 999,90)</td><td>o mesmo avulso</td></tr>
+</table>
+<p>O teto desta proposta, ainda não implementada, é que a cota inclusa custe no máximo 10% do preço do plano. Quinhentos créditos no Profissional ficam em 3,9%. Cinco mil por mês no Empresarial passariam de 20% do ano, então a cota desse plano fica em 2.000 por mês, 9,2% de R$ 999,90.</p>
+<p>Nesse ritmo de 20 turnos por semana, a cota do Profissional cobre cerca de 6 usuários e a do Empresarial cerca de 23. Do usuário seguinte em diante, a resolução sai da cota e só continua se a empresa comprar avulso.</p>
+<p>A cota inclusa não gera receita nova. Ela continua saindo do preço do produto. A margem dessa cota, na mesma conta dos planos, é o que sobra do preço depois do Gemini da cota:</p>
+<table>
+  <tr><th>Plano</th><th>Preço</th><th>Gemini da cota</th><th>Sobra</th><th>Margem</th></tr>
+  <tr><td>Profissional, 500 créditos/mês</td><td>R$ 49,90/mês</td><td>R$ 1,93</td><td>R$ 47,97</td><td>96,1%</td></tr>
+  <tr><td>Empresarial, 2.000/mês</td><td>R$ 999,90/ano</td><td>R$ 92,40/ano</td><td>R$ 907,50</td><td>90,8%</td></tr>
+</table>
+<p>O crédito avulso é outra conta. A receita é só o que a empresa paga a mais. A R$ 0,01, o ROI é <code>(R$ 0,01 − R$ 0,00385) / R$ 0,00385</code> = <strong>160%</strong>. De cada R$ 1 gasto no modelo, R$ 1,60 ficam de lucro. O preço cobre o Gemini e uma folga. Não é os 939% de cobrar R$ 0,04.</p>
+<table>
+  <tr><th>Avulso</th><th>Receita</th><th>Gemini</th><th>Lucro</th><th>ROI</th></tr>
+  <tr><td>1 crédito</td><td>R$ 0,01</td><td>R$ 0,00385</td><td>R$ 0,00615</td><td>160%</td></tr>
+  <tr><td>Pacote de 1.000</td><td>R$ 10</td><td>R$ 3,85</td><td>R$ 6,15</td><td>160%</td></tr>
+</table>
+
+<h2>Leitura curta</h2>
+<p>A carga rodou em QA, com uma réplica de cada serviço (IA, inventário, predição, admin-core, Postgres, Redis). Cem usuários, no máximo cinco conversas ao mesmo tempo. Nove em cada dez turnos terminaram, em 8–9 segundos na mediana. O Gemini não errou. Os 24 HTTP 500 são o 429 do MCP de inventário. No LangSmith, a previsão de falha também sobe a taxa de erro da tool, mas isso não é esses 500. Esse 429 é limite da réplica única; subir o número de réplicas já alivia. O débito da janela foi US$ 0,17, US$ 0,000762 por resolução (R$ 0,00385 a R$ 5,05). Todo valor em dinheiro deste relatório é só o custo do modelo. Infra não entra: réplica, Postgres, Redis, Mongo, Qdrant, Kong e MCP ficam de fora, tanto na carga quanto na projeção e na margem dos planos. O Free não tem IA. Nos planos pagos o preço é do produto inteiro. A cota de créditos não foi implementada. Na proposta ela é da empresa, não por usuário: 500 resoluções por mês no Profissional e 2.000 por mês no Empresarial. Com 20 turnos por semana, um usuário no Profissional fica abaixo da cota (R$ 0,334, 0,67%). Dez ou trinta batem na cota e o plano paga R$ 1,93 (3,9%, sobram 96,1%). Dez usuários no Empresarial ainda cabem (R$ 40 no ano, 4%). Trinta ou cem batem na cota e o plano paga R$ 92,40 no ano (9,2%, sobram 90,8%). Sem essa cota, 30 usuários levariam 20,1% dos R$ 49,90 e 100 levariam 40% dos R$ 999,90. O que passar da cota para ou sai a R$ 0,04 por crédito, a R$ 0,01 por crédito, com ROI de 160% sobre o custo do Gemini, também sem infra.</p>
+
+</body>
+</html>

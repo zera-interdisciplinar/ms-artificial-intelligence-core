@@ -10,7 +10,17 @@ from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import StateGraph
 
 from .exception import MultiAgentServiceNotSetupException, UnitMismatchException
-from .entity import AgentName, AgentResponse, DisposalReport, Message, Role, State, UserPreferences
+from .entity import (
+    AgentName,
+    AgentResponse,
+    BLOCKED_USER_MESSAGE,
+    DisposalReport,
+    Message,
+    RedirectTo,
+    Role,
+    State,
+    UserPreferences,
+)
 from .prompt.report_agent import REPORT_AGENT_SYSTEM_PROMPT_FINAL
 from .service import MultiAgentService, message_to_base_message, render_preferences
 
@@ -133,6 +143,27 @@ class TestProcessMessage:
             blocked_reason=None,
             agent_trace=[AgentName.GUARDRAIL_IN, AgentName.ORCHESTRATOR],
         )
+
+    def test_replaces_guardrail_codes_with_a_user_facing_message_when_blocked(self, service):
+        _stub_graph(service, {
+            **END_STATE,
+            "final_response": None,
+            "blocked": True,
+            "blocked_reason": "inappropriate_content",
+            "called_agents": [AgentName.GUARDRAIL_IN, AgentName.ORCHESTRATOR, AgentName.GUARDRAIL_OUT],
+        })
+
+        response = _process(service)
+
+        assert response.content == BLOCKED_USER_MESSAGE
+        assert response.blocked is True
+        assert response.blocked_reason == "inappropriate_content"
+
+    def test_forwards_redirect_to_from_the_end_state(self, service):
+        redirect = RedirectTo(screen="Scan", message="Escanear código de barras")
+        _stub_graph(service, {**END_STATE, "redirect_to": redirect})
+
+        assert _process(service).redirect_to == redirect
 
     def test_invokes_the_graph_with_user_and_thread_ids_configured(self, service):
         compiled = _stub_graph(service, END_STATE)

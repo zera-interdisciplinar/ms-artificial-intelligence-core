@@ -27,6 +27,11 @@ class Environments:
     LLM_FAST_MODEL: str
     LLM_FALLBACK_MODEL: str
 
+    # LangSmith (LangGraph traces when LANGSMITH_TRACING is true)
+    LANGSMITH_API_KEY: str | None
+    LANGSMITH_PROJECT: str
+    LANGSMITH_TRACING: bool
+
     # Database
     MONGO_URI: str
     REDIS_URL: str
@@ -40,6 +45,9 @@ class Environments:
 
     # FAQ
     FAQ_PDF_PATH: str
+    QDRANT_API_KEY: str | None
+    QDRANT_CLUSTER_URL: str | None
+    QDRANT_COLLECTION: str
 
     # predict_model MCP (sdk-ml-failure-predictor, via Kong gateway)
     PREDICT_MODEL_MCP_URL: str | None
@@ -76,6 +84,16 @@ class Environments:
         self.LLM_FAST_MODEL = os.getenv("LLM_FAST_MODEL", "gemini-3.5-flash-lite")
         self.LLM_FALLBACK_MODEL = os.getenv("LLM_FALLBACK_MODEL", "openai/gpt-oss-120b")
 
+        # LangSmith reads these from os.environ on graph.invoke; keep them in sync.
+        self.LANGSMITH_API_KEY = os.getenv("LANGSMITH_API_KEY")
+        self.LANGSMITH_PROJECT = os.getenv("LANGSMITH_PROJECT", "ms-artificial-intelligence-core")
+        self.LANGSMITH_TRACING = os.getenv("LANGSMITH_TRACING", "false").lower() in ("1", "true", "yes")
+        if self.LANGSMITH_TRACING:
+            os.environ["LANGSMITH_TRACING"] = "true"
+            os.environ["LANGSMITH_PROJECT"] = self.LANGSMITH_PROJECT
+            if self.LANGSMITH_API_KEY:
+                os.environ["LANGSMITH_API_KEY"] = self.LANGSMITH_API_KEY
+
         # Database
         self.MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
         self.REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
@@ -88,7 +106,10 @@ class Environments:
         self.SESSION_HISTORY_LIMIT = int(os.getenv("SESSION_HISTORY_LIMIT", "50"))
 
         # FAQ
-        self.FAQ_PDF_PATH = os.getenv("FAQ_PDF_PATH", "multi_agent/agents/data/faq.pdf")
+        self.FAQ_PDF_PATH = os.getenv("FAQ_PDF_PATH", "local/faq.pdf")
+        self.QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")
+        self.QDRANT_CLUSTER_URL = os.getenv("QDRANT_CLUSTER_URL")
+        self.QDRANT_COLLECTION = os.getenv("QDRANT_COLLECTION", "faq")
 
         # predict_model MCP (sdk-ml-failure-predictor, via Kong gateway)
         self.PREDICT_MODEL_MCP_URL = os.getenv("PREDICT_MODEL_MCP_URL")

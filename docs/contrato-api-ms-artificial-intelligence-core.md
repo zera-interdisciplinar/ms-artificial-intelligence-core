@@ -103,17 +103,19 @@ curl -X POST "https://<host>/api/v1/multi-agent/process-message" \
   "blocked": false,
   "blocked_reason": null,
   "agent_trace": ["guardrail_in", "orchestrator", "faq", "formatter", "judge", "guardrail_out"],
-  "report_url": null
+  "report_url": null,
+  "redirect_to": {"screen": "Scan", "message": "Escanear código de barras"}
 }
 ```
 
 | Campo | Tipo | Descrição |
 |---|---|---|
-| `content` | string | Texto para exibir no chat. Se `blocked` e o fluxo parou cedo, pode ser o `blocked_reason` (ou string vazia). |
+| `content` | string | Texto para exibir no chat. Se `blocked`, é a mensagem padrão de recusa (não o código interno do guardrail). |
 | `blocked` | bool | `true` se guardrail/orquestrador recusou (off-topic, PII, intenção não classificada, etc.). Ainda assim o HTTP é **200**. |
-| `blocked_reason` | string \| null | Motivo em linguagem natural quando `blocked`. |
+| `blocked_reason` | string \| null | Motivo interno quando `blocked` (categoria do guardrail). |
 | `agent_trace` | string[] | Nomes dos nós do grafo que rodaram neste turno (ordem de execução). Ver **Enums**. Não usar para UI de produto; é telemetria. |
 | `report_url` | string \| null | **Sempre `null` neste endpoint.** O chat **não** sobe PDF. PDF de descarte é `POST /api/v1/reports`. |
+| `redirect_to` | `{screen, message}` \| null | Atalho abaixo da mensagem. `screen` é o protocolo de encaminhamento (rota Android `Route.kt` sem prefixo, PascalCase). `message` é a mensagem de exibição no componente. Vem do FAQ. Fora do FAQ, inválido ou ausente: `null`. |
 
 Pergunta e resposta são gravadas **juntas, só quando o turno inteiro termina**. Nada é gravado se o fluxo parou no `guardrail_in` (`blocked` e `orchestrator` ausente do `agent_trace`) ou se o turno falhou (`502`/`503`); nesses casos a mensagem também sai do histórico usado nos próximos turnos.
 
@@ -268,7 +270,7 @@ Nome do arquivo no storage: `disposal-{disposal_id}.pdf`. Falha de storage **nã
 |---|---|
 | `200` | URL nova ou já persistida. |
 | `401` | Bearer sem usuário legível. |
-| `403` | Unidade do usuário irresolvível, ou o relatório já gravado é de outra unidade. |
+| `403` | Unidade irresolvível ou descarte de outra unidade. Body: `{"detail": "disposal does not belong to this user's unit"}`. |
 | `422` | Body inválido (`disposal_id` vazio) ou `Authorization` ausente. |
 
 ### 3.2 `GET /api/v1/reports/{disposal_id}` — URL já gerada
@@ -298,7 +300,7 @@ curl -X GET "https://<host>/api/v1/reports/42" \
 | Status | Quando |
 |---|---|
 | `200` | Relatório existe e é da unidade do usuário. |
-| `403` | Unidade do usuário irresolvível. |
+| `403` | Unidade irresolvível. Body: `{"detail": "the user's unit cannot be resolved"}`. |
 | `404` | Nunca gerado, ou é de outra unidade (não revela qual). Body: `{"detail": "disposal report not found"}`. |
 
 Fluxo típico na UI: após concluir um descarte, `POST /reports` e abrir `report_url`. Reabrir a tela: `GET /reports/{disposal_id}`; `404` → ainda não gerado, chamar o POST.

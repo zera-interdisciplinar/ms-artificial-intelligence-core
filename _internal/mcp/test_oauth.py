@@ -1,6 +1,7 @@
 import asyncio
 import base64
 import json
+import time
 from unittest.mock import AsyncMock, MagicMock
 from uuid import UUID
 
@@ -196,6 +197,44 @@ def test_exchange_refresh_token_raises_when_admin_rejects():
     stored = asyncio.run(provider.load_refresh_token(client, token.refresh_token))
     with pytest.raises(TokenError):
         asyncio.run(provider.exchange_refresh_token(client, stored, ["ask"]))
+    assert asyncio.run(provider.load_refresh_token(client, token.refresh_token)) is None
+
+
+def test_load_access_token_returns_none_after_expiry():
+    access = _jwt(USER_ID)
+    provider, client = _provider(
+        {"accessToken": access, "refreshToken": "admin-refresh", "expiresIn": 3600}
+    )
+    _login(provider, client)
+    stored = asyncio.run(provider.load_access_token(access))
+    asyncio.run(provider._put("access", access, stored.model_copy(update={"expires_at": int(time.time()) - 1}), 1))
+
+    assert asyncio.run(provider.load_access_token(access)) is None
+
+
+def test_refresh_grant_dies_with_the_platform_login():
+    access = _jwt(USER_ID)
+    provider, client = _provider(
+        {"accessToken": access, "refreshToken": "admin-refresh", "expiresIn": 3600}
+    )
+    token = _login(provider, client)
+    stored = asyncio.run(provider.load_refresh_token(client, token.refresh_token))
+    assert stored.expires_at <= int(time.time()) + 3600
+    assert stored.resource == _params().resource
+    asyncio.run(provider._put("refresh", token.refresh_token, stored.model_copy(update={"expires_at": int(time.time()) - 1}), 1))
+
+    assert asyncio.run(provider.load_refresh_token(client, token.refresh_token)) is None
+
+
+def test_refresh_without_expiry_is_dead():
+    access = _jwt(USER_ID)
+    provider, client = _provider(
+        {"accessToken": access, "refreshToken": "admin-refresh", "expiresIn": 3600}
+    )
+    token = _login(provider, client)
+    stored = asyncio.run(provider.load_refresh_token(client, token.refresh_token))
+    asyncio.run(provider._put("refresh", token.refresh_token, stored.model_copy(update={"expires_at": None}), 1))
+    assert asyncio.run(provider.load_refresh_token(client, token.refresh_token)) is None
 
 
 def test_revoke_drops_access_and_refresh():
