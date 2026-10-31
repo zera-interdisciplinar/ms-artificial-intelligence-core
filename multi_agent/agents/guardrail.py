@@ -143,7 +143,10 @@ class Guardrail:
                 # call the guardrail_out_agent to validate the formatted response as safe or unsafe
                 self.logger.Info("Guardrail out: invoking guardrail_out_agent for final validation")
                 guardrail_out_response = await self.guardrail_out_agent.ainvoke(
-                    {"messages": [HumanMessage(content=json.dumps({"formatted_response": formatted_response}))]}
+                    {"messages": [HumanMessage(content=json.dumps({
+                        "request": state.get("current_request"),
+                        "formatted_response": formatted_response,
+                    }))]}
                 )
 
                 self.logger.Debug(f"Guardrail out raw response={guardrail_out_response['messages'][-1].content}")

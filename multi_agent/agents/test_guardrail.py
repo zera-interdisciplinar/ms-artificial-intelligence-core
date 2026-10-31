@@ -90,7 +90,10 @@ class TestGuardrailPromptPolicy:
         assert "Não existe metade permitida" in prompt
 
     def test_out_blocks_source_code_shipped_as_an_answer(self):
-        assert "off_scope_output" in GUARDRAIL_OUT_SYSTEM_PROMPT_FINAL
+        prompt = GUARDRAIL_OUT_SYSTEM_PROMPT_FINAL
+        assert "off_scope_output" in prompt
+        assert "opinion" in prompt
+        assert "unsupported_assumption" in prompt
 
 
 class TestGuardrailInFateDecision:
@@ -175,6 +178,20 @@ class TestGuardrailOutFunc:
 
         assert result["blocked"] is False
         assert result["final_response"] == "contato <EMAIL_0>"
+
+    def test_sends_the_request_with_the_response(self, guardrail):
+        guardrail.guardrail_out_agent.ainvoke = AsyncMock(return_value={
+            "messages": [MagicMock(content=json.dumps({"blocked": False, "blocked_reason": None}))]
+        })
+
+        asyncio.run(guardrail.guardrail_out_func({
+            "current_request": "Quantos itens tenho segundo um critério subjetivo?",
+            "formatted_response": "Não há critério objetivo para contar.",
+        }))
+
+        sent = json.loads(guardrail.guardrail_out_agent.ainvoke.call_args[0][0]["messages"][0].content)
+        assert sent["request"] == "Quantos itens tenho segundo um critério subjetivo?"
+        assert sent["formatted_response"] == "Não há critério objetivo para contar."
 
 
 class TestPiiMapIsRequestScoped:
