@@ -54,7 +54,7 @@ jobs:
       MONGO_URI: mongodb://localhost:27017
       REDIS_URL: redis://localhost:6379
       MONGO_DB_NAME: ms-artificial-intelligence-core
-      PREDICT_MODEL_MCP_URL: ${{ secrets.PREDICT_MODEL_MCP_URL }}
+      PREDICT_MODEL_MCP_URL: https://www.zeratech.online/qa/predictor
       PREDICT_MODEL_API_KEY: ${{ secrets.PREDICT_MODEL_API_KEY }}
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
@@ -62,9 +62,9 @@ jobs:
       QDRANT_API_KEY: ${{ secrets.QDRANT_API_KEY }}
       QDRANT_CLUSTER_URL: ${{ secrets.QDRANT_CLUSTER_URL }}
       QDRANT_COLLECTION: ${{ secrets.QDRANT_COLLECTION }}
-      MS_INVENTORY_MCP_URL: ${{ secrets.MS_INVENTORY_MCP_URL }}
+      MS_INVENTORY_MCP_URL: https://www.zeratech.online/qa/inventory/mcp
       MS_INVENTORY_API_KEY: ${{ secrets.MS_INVENTORY_API_KEY }}
-      ADMIN_CORE_URL: ${{ secrets.ADMIN_CORE_URL }}
+      ADMIN_CORE_URL: https://www.zeratech.online/qa/administrative
       ADMIN_CORE_API_KEY: ${{ secrets.ADMIN_CORE_API_KEY }}
       SELF_MCP_URL: http://127.0.0.1:8000
       ADMIN_CORE_SERVICE_EMAIL: ${{ secrets.ADMIN_CORE_SERVICE_EMAIL }} # this will be used only in case of integration tests
