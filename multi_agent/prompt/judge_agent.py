@@ -37,15 +37,17 @@ anteriores.
 
 Para respostas de predict_model, o número é a previsão em meses contada a
 partir da data de compra, não a partir de hoje. Dizer isso não é acréscimo
-indevido. Um item cuja estimativa não pôde ser
-calculada (por exemplo, por falta de um dado obrigatório como zona climática)
-NÃO é uma omissão quando a resposta pergunta ao usuário pelo dado faltante: é
-o comportamento correto quando o predict_model não pôde chamar a ferramenta
-de predição com segurança. Não reprove por esse motivo, desde que a resposta
-identifique explicitamente qual item não foi estimado e pergunte pelo dado
-que falta. Reprove apenas se um item tiver sido omitido por completo (sem
-menção alguma), ou se um valor numérico tiver sido apresentado sem
-corresponder ao que está no estado.
+indevido.
+
+Tipo, fabricante, modelo, ano de fabricação e data de compra vêm do
+inventário. Se `request` não trouxer esses campos (nem um bloco de dados do
+inventário) e `formatted_response` pedir isso ao usuário, reprove. A
+discrepancy deve mandar consultar o inventário desses itens e só então prever.
+Perguntar ao usuário é o último caso: só para o campo que a consulta não
+devolveu. Se `request` já inclui o retorno do inventário e ainda falta um
+campo, aprovar a pergunta só sobre esse campo, desde que o item seja nomeado.
+Reprove item omitido por completo, ou número que não corresponda ao que está
+em `predictions`.
 """
 
 FORWARDING_PROTOCOL: str = """
@@ -81,8 +83,13 @@ Assistente: {"approved": true, "discrepancy": null}
 """
 
 SHOT_4: str = """
-Usuário: {"request": "Qual a vida útil estimada do tablet do lote 45?", "formatted_response": "Tablet Apple iPad: qual a zona climática onde esse tablet fica (ex.: tropical, temperada, fria, árida)? Com essa informação eu calculo a estimativa."}
+Usuário: {"request": "Qual a vida útil estimada do tablet do lote 45?\\n\\n[Dados do inventário:\\nTablet Apple iPad, adquirido em 2021-04-12, fabricado em 2020. Zona climática e intensidade de uso não constam.]", "predictions": [{"item": "Tablet Apple iPad", "estimated_remaining_months": null, "adjusted": false, "adjustment_reason": "climateZone não informado"}], "formatted_response": "Tablet Apple iPad: qual a zona climática onde esse tablet fica? As opções são tropical, temperada, fria ou árida."}
 Assistente: {"approved": true, "discrepancy": null}
+"""
+
+SHOT_5: str = """
+Usuário: {"request": "Em quanto tempo esses notebooks do estoque vão falhar?", "predictions": [{"item": "Notebook NB-4521", "estimated_remaining_months": null, "adjusted": false, "adjustment_reason": "manufacturer, model e acquiredAt não informados"}], "formatted_response": "Para calcular, me diga fabricante, modelo, ano de fabricação e data de compra de cada notebook."}
+Assistente: {"approved": false, "discrepancy": "campos de inventário foram pedidos ao usuário sem consulta prévia; busque tipo, fabricante, modelo, ano e data de compra no inventário e só então preveja; pergunte ao usuário apenas o que a consulta não devolver"}
 """
 
 JUDGE_AGENT_SYSTEM_PROMPT_FINAL: str = f"""{GENERAL_SYSTEM_PROMPT}
@@ -103,5 +110,7 @@ SHOTS_OPEN
 {SHOT_3}
 
 {SHOT_4}
+
+{SHOT_5}
 SHOTS_END
 """
