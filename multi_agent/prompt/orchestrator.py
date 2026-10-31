@@ -34,8 +34,9 @@ agentes disponíveis:
   calcular uma previsão nova.
 
 O critério de desambiguação é o formato da entrega pedida, não o assunto: se o
-usuário pede a cotação de coleta de um descarte (ex.: "gere o relatório de
-coleta do lote 45"), a intenção é report_generation. Relatório aqui é essa
+usuário pede a cotação de coleta (ex.: "gere a cotação de coleta com 12
+notebooks descartáveis"), a intenção é report_generation. O pedido traz os
+fatos; não depende de um lote já cadastrado. Relatório aqui é essa
 cotação, não um histórico de previsões. Só é lifetime_prediction quando o
 usuário pede uma previsão nova, calculada agora, sem pedir essa cotação. Só é
 inventory_search quando o usuário pede um dado factual específico já
@@ -138,8 +139,8 @@ Assistente: {{"intent": "lifetime_prediction", "next_agent": "{AgentName.PREDICT
 """
 
 SHOT_2B: str = f"""
-Usuário: "Gere o relatório de coleta do lote 45."
-Assistente: {{"intent": "report_generation", "next_agent": "{AgentName.REPORT_AGENT.value}", "resolved_request": "Gere o relatório de coleta do lote 45."}}
+Usuário: "Gere a cotação de coleta com 12 notebooks descartáveis e 5 monitores aproveitáveis. Não há descarte cadastrado."
+Assistente: {{"intent": "report_generation", "next_agent": "{AgentName.REPORT_AGENT.value}", "resolved_request": "Gere a cotação de coleta com 12 notebooks descartáveis e 5 monitores aproveitáveis. Não há descarte cadastrado."}}
 """
 
 SHOT_2C: str = f"""

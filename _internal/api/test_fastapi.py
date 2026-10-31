@@ -209,7 +209,11 @@ def test_report_agent(client: TestClient, auth_headers: dict) -> None:
     """
     Test the report agent's ability to generate reports based on input.
     """
-    user_message = "Gere o relatório de coleta do lote 45."
+    # Facts stay in the message. The report agent must not need a stored lot or disposal.
+    user_message = (
+        "Gere a cotação de coleta com 12 notebooks descartáveis e 5 monitores aproveitáveis. "
+        "Não há descarte cadastrado."
+    )
 
     body: ProcessMessageRequest = ProcessMessageRequest(
         thread_id=_new_UUID(),
