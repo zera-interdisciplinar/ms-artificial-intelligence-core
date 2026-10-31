@@ -66,18 +66,17 @@ documento ou o item já entregue (previsão, cotação, lista). Isso é
 unclassified: a suggestion repete só o que o histórico já disse, sem cálculo
 novo e sem política inventada.
 
-Se a solicitação for de lifetime_prediction mas se referir a itens de forma
-genérica (ex.: "todos os itens do estoque", "cada item", "os produtos que
-estão lá") sem detalhes concretos (categoria, patrimônio, características)
-necessários para calcular a previsão, encaminhe primeiro para inventory_agent
-buscar esses detalhes: "next_agent" é "inventory_agent", "resolved_request" é
-uma consulta factual ao inventário que traga os dados necessários, e você
-inclui a chave adicional "pending_agent" com valor "predict_model" e
-"pending_request" com a pergunta de previsão original (autocontida). Depois
-que o inventory_agent responder, o sistema retoma automaticamente para
-predict_model com os dados do inventário. Use isso só quando faltar dado
-concreto; se a pergunta já nomeia itens/lotes específicos, vá direto para
-predict_model como de costume, sem "pending_agent"/"pending_request".
+Se a solicitação for de lifetime_prediction e o texto deste turno mais o
+histórico ainda não tiverem, para cada item, os dados que o modelo exige
+(tipo, fabricante, modelo, zona climática, intensidade de uso, ano de
+fabricação e data de compra), não pergunte isso ao usuário. Encaminhe primeiro
+para inventory_agent: "next_agent" é "inventory_agent", "resolved_request" pede
+esses campos dos itens já identificados, "pending_agent" é "predict_model" e
+"pending_request" é a previsão autocontida. O grafo retoma predict_model com
+o que o inventário devolver. Nome ou patrimônio não bastam para pular o
+inventário. Vá direto para predict_model, sem pending_agent, só quando esses
+campos já estiverem na pergunta ou no histórico. O que continuar faltando
+depois da consulta é o único caso em que a resposta pede o dado ao usuário.
 
 Encaminhe para exatamente um agente por solicitação quando a fala pedir execução:
 cotação de coleta, previsão nova, dado do inventário ou dúvida sobre o
@@ -135,7 +134,7 @@ Assistente: {{"intent": "faq", "next_agent": "{AgentName.FAQ_AGENT.value}", "res
 
 SHOT_2: str = f"""
 Usuário: "Quanto tempo de vida útil resta para as baterias do lote 12?"
-Assistente: {{"intent": "lifetime_prediction", "next_agent": "{AgentName.PREDICT_MODEL.value}", "resolved_request": "Quanto tempo de vida útil resta para as baterias do lote 12?"}}
+Assistente: {{"intent": "lifetime_prediction", "next_agent": "{AgentName.INVENTORY_AGENT.value}", "resolved_request": "Busque os dados das baterias do lote 12 necessários para previsão de vida útil: tipo, fabricante, modelo, zona climática, intensidade de uso, ano de fabricação e data de compra.", "pending_agent": "{AgentName.PREDICT_MODEL.value}", "pending_request": "Qual a vida útil estimada das baterias do lote 12?"}}
 """
 
 SHOT_2B: str = f"""
@@ -149,7 +148,7 @@ Usuário: Quanto tempo de vida útil resta para as baterias do lote 12?
 Assistente: Restam aproximadamente 8 meses para as baterias do lote 12.]
 
 Usuário: "E para o lote 15?"
-Assistente: {{"intent": "lifetime_prediction", "next_agent": "{AgentName.PREDICT_MODEL.value}", "resolved_request": "Quanto tempo de vida útil resta para as baterias do lote 15?"}}
+Assistente: {{"intent": "lifetime_prediction", "next_agent": "{AgentName.INVENTORY_AGENT.value}", "resolved_request": "Busque os dados das baterias do lote 15 necessários para previsão de vida útil: tipo, fabricante, modelo, zona climática, intensidade de uso, ano de fabricação e data de compra.", "pending_agent": "{AgentName.PREDICT_MODEL.value}", "pending_request": "Qual a vida útil estimada das baterias do lote 15?"}}
 """
 
 SHOT_2F: str = f"""
@@ -182,7 +181,23 @@ Usuário: Quais são os projetores que tenho no meu estoque?
 Assistente: Você tem 2 projetores: Epson PowerLite (patrimônio PRJ-01) e BenQ MX550 (patrimônio PRJ-02).]
 
 Usuário: "Faça uma previsão para ele."
-Assistente: {{"intent": "lifetime_prediction", "next_agent": "{AgentName.PREDICT_MODEL.value}", "resolved_request": "Faça uma previsão de vida útil para o projetor Epson PowerLite (patrimônio PRJ-01) e para o projetor BenQ MX550 (patrimônio PRJ-02)."}}
+Assistente: {{"intent": "lifetime_prediction", "next_agent": "{AgentName.INVENTORY_AGENT.value}", "resolved_request": "Busque tipo, fabricante, modelo, zona climática, intensidade de uso, ano de fabricação e data de compra do projetor Epson PowerLite (patrimônio PRJ-01) e do projetor BenQ MX550 (patrimônio PRJ-02).", "pending_agent": "{AgentName.PREDICT_MODEL.value}", "pending_request": "Faça uma previsão de vida útil para o projetor Epson PowerLite (patrimônio PRJ-01) e para o projetor BenQ MX550 (patrimônio PRJ-02)."}}
+"""
+
+SHOT_2J: str = f"""
+Usuário: "Qual a estimativa de tempo até falha de um notebook Dell Latitude 5420, fabricado em 2022, adquirido em 2023-01-15, em zona climática tropical, uso intenso (nível 8)?"
+Assistente: {{"intent": "lifetime_prediction", "next_agent": "{AgentName.PREDICT_MODEL.value}", "resolved_request": "Qual a estimativa de tempo até falha de um notebook Dell Latitude 5420, fabricado em 2022, adquirido em 2023-01-15, em zona climática tropical, uso intenso (nível 8)?"}}
+"""
+
+SHOT_2K: str = f"""
+[Histórico recente da conversa:
+Usuário: Quais são todos os itens do estoque?
+Assistente: Temos 3 notebooks (NB-4521, NB-4522, NB-4530) e 2 baterias (BAT-10, BAT-11).
+Usuário: Em quanto tempo esses itens vão falhar?
+Assistente: Para calcular, preciso de tipo, fabricante, modelo, zona climática, uso, ano de fabricação e data de compra.]
+
+Usuário: "Procure esses dados e depois mande para a previsão."
+Assistente: {{"intent": "lifetime_prediction", "next_agent": "{AgentName.INVENTORY_AGENT.value}", "resolved_request": "Busque tipo, fabricante, modelo, zona climática, intensidade de uso, ano de fabricação e data de compra dos itens NB-4521, NB-4522, NB-4530, BAT-10 e BAT-11.", "pending_agent": "{AgentName.PREDICT_MODEL.value}", "pending_request": "Faça a previsão de vida útil dos itens NB-4521, NB-4522, NB-4530, BAT-10 e BAT-11."}}
 """
 
 SHOT_2H: str = f"""
@@ -241,6 +256,10 @@ SHOTS_OPEN
 {SHOT_2F}
 
 {SHOT_2G}
+
+{SHOT_2J}
+
+{SHOT_2K}
 
 {SHOT_2H}
 
