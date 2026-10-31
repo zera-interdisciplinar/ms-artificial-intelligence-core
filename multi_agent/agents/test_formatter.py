@@ -96,3 +96,27 @@ class TestFormatterFunc:
                 }
             ],
         }
+
+    def test_sends_the_current_request(self):
+        formatter_agent = MagicMock()
+        formatter_agent.ainvoke = AsyncMock(return_value={
+            "messages": [MagicMock(content=json.dumps({"formatted_response": "8 meses"}))]
+        })
+        formatter_func = make_formatter_func(formatter_agent)
+
+        asyncio.run(formatter_func(cast(State, {
+            "messages": [HumanMessage(content="quanto tempo falta?")],
+            "current_request": "Qual a vida útil do notebook Dell Latitude 5420?",
+            "predictions": [
+                PredictionItem(
+                    item="Notebook Dell Latitude 5420",
+                    estimated_remaining_months=8,
+                    adjusted=False,
+                    adjustment_reason=None,
+                )
+            ],
+        })))
+
+        sent = json.loads(formatter_agent.ainvoke.call_args[0][0]["messages"][0].content)
+        assert sent["current_request"] == "Qual a vida útil do notebook Dell Latitude 5420?"
+        assert "predictions" in sent

@@ -227,6 +227,20 @@ class TestProcessMessage:
         assert [(m.role, m.content) for m in saved] == [(Role.USER, "olá"), (Role.ASSISTANT, "resposta")]
         assert saved[0].created_at <= saved[1].created_at
 
+    def test_returns_restored_pii_and_stores_the_masked_text(self, service):
+        compiled = _stub_graph(service, {
+            **END_STATE,
+            "final_response": "contato <EMAIL_0>",
+            "pii_map": {"<EMAIL_0>": "joao@example.com"},
+        })
+
+        response = _process(service)
+
+        assert response.content == "contato joao@example.com"
+        saved = [call.args[0] for call in service.repository.save_message.call_args_list]
+        assert saved[1].content == "contato <EMAIL_0>"
+        assert compiled.aupdate_state.await_args.args[1]["messages"][0].content == "contato <EMAIL_0>"
+
     def test_a_failed_turn_saves_nothing_and_leaves_no_question_in_the_checkpoint(self, service):
         compiled = _stub_graph(service, END_STATE)
         compiled.ainvoke = AsyncMock(side_effect=RuntimeError("llm down"))

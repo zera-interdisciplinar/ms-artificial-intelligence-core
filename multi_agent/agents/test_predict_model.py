@@ -80,6 +80,32 @@ class TestPredictModelFunc:
             )
         ]
 
+    def test_truncates_a_fractional_month_count_toward_zero(self):
+        predict_model_agent = MagicMock()
+        predict_model_agent.ainvoke = AsyncMock(return_value={
+            "messages": [
+                MagicMock(
+                    content=json.dumps(
+                        {
+                            "predictions": [
+                                {
+                                    "item": "Notebook Dell Latitude 5420",
+                                    "estimated_remaining_months": 8.4,
+                                    "adjusted": False,
+                                    "adjustment_reason": None,
+                                }
+                            ]
+                        }
+                    )
+                )
+            ]
+        })
+        predict_model_func = make_predict_model_func(predict_model_agent)
+
+        result = asyncio.run(predict_model_func(cast(State, {"current_request": "notebook Dell"})))
+
+        assert result["predictions"][0].estimated_remaining_months == 8
+
     def test_raises_when_the_agent_hallucinates_a_malformed_prediction_shape(self):
         predict_model_agent = MagicMock()
         predict_model_agent.ainvoke = AsyncMock(return_value={

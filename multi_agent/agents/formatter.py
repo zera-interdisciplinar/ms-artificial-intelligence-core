@@ -32,6 +32,8 @@ def make_formatter_func(formatter_agent: CompiledStateGraph) -> GraphNodeFunc:
         predictions = state.get("predictions")
         if predictions:
             source_state["predictions"] = [p.model_dump() for p in predictions]
+        if state.get("current_request"):
+            source_state["current_request"] = state["current_request"]
         if state.get("user_preferences"):
             source_state["user_preferences"] = state["user_preferences"]
         history = render_history(list(state.get("messages") or [])[:-1])

@@ -80,7 +80,9 @@ def test_every_pending_route_has_an_edge_from_inventory(pending):
 
 
 def test_rejected_answer_retries_once_from_the_orchestrator():
-    nodes = _nodes(**{AgentName.JUDGE_AGENT: _node(AgentName.JUDGE_AGENT, approved=False, judge_attempts=1)})
+    nodes = _nodes(**{AgentName.JUDGE_AGENT: _node(
+        AgentName.JUDGE_AGENT, approved=False, judge_attempts=1, discrepancy="omit",
+    )})
     trace = _run(nodes, lambda state: AgentName.ORCHESTRATOR)
     assert trace.count(AgentName.ORCHESTRATOR) == 2
     assert trace[-1] == AgentName.GUARDRAIL_OUT

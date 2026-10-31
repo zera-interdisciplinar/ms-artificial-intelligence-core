@@ -106,6 +106,7 @@ class TestInventoryChaining:
         assert result["pending_request"] is None
         assert "Faça uma previsão de quebra para o NB-4521." in result["current_request"]
         assert "NB-4521: notebook, categoria eletrônico." in result["current_request"]
+        assert result["inventory_answer"] is None
 
     def test_fate_decision_follows_next_agent(self):
         assert inventory_fate_decision(cast(State, {"next_agent": AgentName.PREDICT_MODEL})) == AgentName.PREDICT_MODEL

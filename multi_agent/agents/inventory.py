@@ -40,14 +40,15 @@ def make_inventory_func(inventory_agent: CompiledStateGraph) -> GraphNodeFunc:
 
         pending_agent = state.get("pending_agent")
         if pending_agent:
-            #  in this case, orchestrator routed here first only to fetch item detail missing
-            # from the original request; resume with the pending agent, now
-            # armed with that detail, instead of going straight to formatter.
+            # orchestrator routed here only to fetch detail for pending_agent.
+            # the detail travels inside current_request; inventory_answer is the
+            # user-facing reply and must stay empty on this prefetch.
             result["next_agent"] = pending_agent
             result["current_request"] = (
                 f"{state.get('pending_request')}\n\n"
                 f"[Dados do inventário:\n{classification['answer']}]"
             )
+            result["inventory_answer"] = None
             result["pending_agent"] = None
             result["pending_request"] = None
         else:

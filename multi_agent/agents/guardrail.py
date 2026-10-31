@@ -13,17 +13,16 @@ from logger.logger import Logger
 # ==============================================
 # GENERAL CONSTANTS
 # ==============================================
+# Punctuation is required. Bare digit runs and UUIDs are patrimônios, lotes and
+# disposal ids; masking them makes the MCP call search for a placeholder.
 PII_REGEX: list[tuple[str, str]] = [
-    ("CPF", r"\b\d{3}\.?\d{3}\.?\d{3}-?\d{2}\b"),
-    ("CNPJ", r"\b\d{2}\.?\d{3}\.?\d{3}/?\d{4}-?\d{2}\b"),
-    ("RG", r"\b\d{1,2}\.?\d{3}\.?\d{3}-?[\dXx]\b"),
-    ("CNH", r"\b\d{11}\b"),
+    ("CPF", r"\b\d{3}\.\d{3}\.\d{3}-\d{2}\b"),
+    ("CNPJ", r"\b\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2}\b"),
+    ("RG", r"\b\d{1,2}\.\d{3}\.\d{3}-[\dXx]\b"),
     ("PASSPORT", r"\b[A-Z]{2}\d{6}\b"),
     ("EMAIL", r"\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[A-Za-z]{2,}\b"),
-    ("PHONE", r"\b(?:\+55\s?)?(?:\(?\d{2}\)?\s?)?(?:9\d{4}|\d{4})-?\d{4}\b"),
-    ("CEP", r"\b\d{5}-?\d{3}\b"),
-    ("CREDIT_CARD", r"\b(?:\d{4}[ -]?){3}\d{4}\b"),
-    ("PIX_UUID", r"\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}\b"),
+    ("PHONE", r"\b(?:\+55\s?)?(?:\(?\d{2}\)?\s)?(?:9\d{4}|\d{4})-\d{4}\b"),
+    ("CREDIT_CARD", r"\b(?:\d{4}[ -]){3}\d{4}\b"),
     ("IPV4", r"\b(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}\b"),
     ("IPV6", r"\b(?:[A-Fa-f0-9]{1,4}:){2,7}[A-Fa-f0-9]{1,4}\b"),
     ("JWT", r"\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b"),
@@ -160,24 +159,29 @@ class Guardrail:
                             "final_response": None,
                         }
 
-                final_response = self._retreive_pii_from_text(formatted_response, state.get("pii_map", {}))
-                self.logger.Debug(f"Guardrail out: final_response preview={final_response[:200]}")
+                # placeholders stay in the checkpoint and in Mongo; the service restores
+                # them only on the HTTP response
+                self.logger.Debug(f"Guardrail out: final_response preview={formatted_response[:200]}")
                 self.logger.Info("Guardrail out: returning final response to user")
 
                 return {
                     "called_agents": [AgentName.GUARDRAIL_OUT],
                     "blocked": classification["blocked"],
                     "blocked_reason": classification["blocked_reason"],
-                    "final_response": final_response,
+                    "final_response": formatted_response,
                 }
 
         def _retreive_pii_from_text(self, text: str, pii_map: dict[str, str]) -> str:
                 """
                 Function to retreive PII from the text using the pii_map.
                 """
-                new_text = text
+                return restore_pii(text, pii_map)
 
-                for replacement, original in pii_map.items():
-                        new_text = new_text.replace(replacement, original)
 
-                return new_text
+def restore_pii(text: str, pii_map: dict[str, str]) -> str:
+    """Puts the original PII back. Used on the user-facing response only."""
+
+    new_text = text
+    for replacement, original in pii_map.items():
+        new_text = new_text.replace(replacement, original)
+    return new_text

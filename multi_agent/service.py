@@ -44,7 +44,7 @@ from .prompt.guardrail_out import GUARDRAIL_OUT_SYSTEM_PROMPT_FINAL
 from .prompt.preferences_agent import PREFERENCES_AGENT_SYSTEM_PROMPT_FINAL
 
 # agents
-from .agents.guardrail import Guardrail
+from .agents.guardrail import Guardrail, restore_pii
 from .agents.orchestrator import make_orchestrator_func
 from .agents.predict_model import make_predict_model_func
 from .agents.inventory import make_inventory_func
@@ -294,10 +294,12 @@ class MultiAgentService(IMultiAgentService):
 
         # the flow only leaves guardrail_in when blocked=False there; if blocked=True and
         # the orchestrator was never reached, the flow stopped at guardrail_in, so nothing
-        # is saved. blocked=True set later on (orchestrator's unclassified intent,
-        # guardrail_out) still produces a turn worth saving.
+        # is saved. blocked=True set later by guardrail_out still produces a turn worth
+        # saving. unclassified is not a block: the suggestion is the answer.
         stopped_at_guardrail_in = end_state["blocked"] and AgentName.ORCHESTRATOR not in end_state["called_agents"]
-        content = BLOCKED_USER_MESSAGE if end_state["blocked"] else (end_state["final_response"] or "")
+        stored = BLOCKED_USER_MESSAGE if end_state["blocked"] else (end_state["final_response"] or "")
+        # history and preferences keep the masked text; only the caller sees the original PII
+        content = stored if end_state["blocked"] else restore_pii(stored, end_state.get("pii_map") or {})
 
         if not stopped_at_guardrail_in:
             masked = next(m for m in end_state["messages"] if m.id == user_message_id)
@@ -315,14 +317,14 @@ class MultiAgentService(IMultiAgentService):
                 user_id=user_id,
                 thread_id=thread_id,
                 role=Role.ASSISTANT,
-                content=content,
+                content=stored,
                 agent=AgentName.GUARDRAIL_OUT,
                 created_at=datetime.now(timezone.utc),
             ))
 
             # feeds the assistant's reply back into the checkpoint so the orchestrator
-            # can resolve conversational references on the next turn.
-            await self.compiled_graph.aupdate_state(config, {"messages": [AIMessage(content=content)]})
+            # can resolve conversational references on the next turn. Masked, like Mongo.
+            await self.compiled_graph.aupdate_state(config, {"messages": [AIMessage(content=stored)]})
 
         self.logger.Info(f"Finished processing message for user_id: {user_id}, thread_id: {thread_id}")
 

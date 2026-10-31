@@ -35,6 +35,7 @@ def make_judge_func(judge_agent: CompiledStateGraph) -> GraphNodeFunc:
                             {
                                 "request": request,
                                 "formatted_response": state["formatted_response"],
+                                **_specialist_output(state),
                             }
                         )
                     )
@@ -58,26 +59,56 @@ def make_judge_func(judge_agent: CompiledStateGraph) -> GraphNodeFunc:
             "judge_attempts": 1, # this is the first attempt, so we set it to 1. If there are more attempts, it will be incremented in the next call
         }
 
-        will_retry = not approved and attempts_done < MAX_JUDGE_ATTEMPTS
+        # a rejection with no discrepancy cannot be corrected; shipping the last answer
+        # is safer than a blind second pass
+        will_retry = not approved and bool(discrepancy) and attempts_done < MAX_JUDGE_ATTEMPTS
 
         if will_retry:
             _logger.Warning(f"Judge: will retry due to discrepancy={discrepancy}")
-            result.update({"next_agent": None, "intent": None})
+            result.update({
+                "next_agent": None,
+                "intent": None,
+                # the next specialist must not inherit this attempt's output
+                "answer": None,
+                "sources": [],
+                "report_html": None,
+                "predictions": [],
+                "inventory_answer": None,
+                "redirect_to": None,
+                "formatted_response": None,
+            })
 
         return result
 
     return judge_func
 
 
+def _specialist_output(state: State) -> dict[str, Any]:
+    """This turn's specialist fields. History stays out: a reply that only matches
+    an older turn would look coherent."""
+
+    payload: dict[str, Any] = {}
+    for key in ("answer", "sources", "report_html", "inventory_answer"):
+        value = state.get(key)
+        if value not in (None, [], ""):
+            payload[key] = value
+    predictions = state.get("predictions")
+    if predictions:
+        payload["predictions"] = [item.model_dump() for item in predictions]
+    return payload
+
+
 def judge_fate_decision(state: State) -> str:
     """
     Function to decide the next agent based on the judge_agent's decision and the number of attempts done.
-    If the response is approved, it goes to guardrail_out. If not approved and there are attempts left, it goes back to orchestrator. If not approved and no attempts left, it goes to guardrail_out and the flow finishes with the last response generated.
+    If the response is approved, it goes to guardrail_out. If not approved, a discrepancy
+    was recorded and there are attempts left, it goes back to orchestrator. Otherwise it
+    goes to guardrail_out and the flow finishes with the last response generated.
     """
     if state["approved"]:
         return AgentName.GUARDRAIL_OUT
 
-    if state["judge_attempts"] < MAX_JUDGE_ATTEMPTS:
+    if state["judge_attempts"] < MAX_JUDGE_ATTEMPTS and state.get("discrepancy"):
         return AgentName.ORCHESTRATOR
 
     return AgentName.GUARDRAIL_OUT

@@ -60,7 +60,8 @@ O cliente **não** escolhe o agente. Exemplos de intenção (texto livre em `con
 - Dado já existente no inventário (item, lote, bateria, garantia) → `inventory_agent`
 - Estimativa de tempo até falha de equipamento → `predict_model`
 - Texto de relatório (sem PDF) → `report`
-- Fora de escopo / PII / injection → `blocked: true` (guardrail)
+- Injeção ou outro conteúdo inseguro → `blocked: true` (guardrail). PII estruturado (CPF, e-mail, telefone) é mascarado e a resposta ao usuário sai restaurada; o histórico guarda a máscara.
+- Saudação, pergunta geral ou retomada de um resultado já dito → o orquestrador responde em `content` com `blocked: false`. Isso não é recusa.
 
 ### Request
 
@@ -111,7 +112,7 @@ curl -X POST "https://<host>/api/v1/multi-agent/process-message" \
 | Campo | Tipo | Descrição |
 |---|---|---|
 | `content` | string | Texto para exibir no chat. Se `blocked`, é a mensagem padrão de recusa (não o código interno do guardrail). |
-| `blocked` | bool | `true` se guardrail/orquestrador recusou (off-topic, PII, intenção não classificada, etc.). Ainda assim o HTTP é **200**. |
+| `blocked` | bool | `true` se o guardrail recusou a mensagem ou a resposta (injeção, conteúdo inseguro, PII crua gerada no texto). Saudação, pergunta geral e intenção não classificada não são bloqueio: a resposta vai em `content` com `blocked: false`. HTTP continua **200**. |
 | `blocked_reason` | string \| null | Motivo interno quando `blocked` (categoria do guardrail). |
 | `agent_trace` | string[] | Nomes dos nós do grafo que rodaram neste turno (ordem de execução). Ver **Enums**. Não usar para UI de produto; é telemetria. |
 | `report_url` | string \| null | **Sempre `null` neste endpoint.** O chat **não** sobe PDF. PDF de descarte é `POST /api/v1/reports`. |
@@ -178,7 +179,7 @@ curl -X GET "https://<host>/api/v1/multi-agent/conversations?page=1&page_size=20
 
 ### 2.2 `GET /api/v1/multi-agent/conversations/{thread_id}` — mensagens da thread
 
-Todas as mensagens da thread, **mais antigas primeiro**, só se pertencerem ao usuário do Bearer. Array simples (sem envelope). As mensagens do usuário vêm como foram gravadas, com PII mascarada (`<CPF_0>`, `<EMAIL_0>`...).
+Todas as mensagens da thread, **mais antigas primeiro**, só se pertencerem ao usuário do Bearer. Array simples (sem envelope). Pergunta e resposta vêm como foram gravadas, com PII mascarada (`<CPF_0>`, `<EMAIL_0>`...). O `POST` de chat devolve a resposta com o PII restaurado; este histórico não.
 
 ### Request
 
