@@ -94,6 +94,7 @@ class TestGuardrailPromptPolicy:
         assert "off_scope_output" in prompt
         assert "opinion" in prompt
         assert "unsupported_assumption" in prompt
+        assert "Não bloqueie estimativa" in prompt
 
 
 class TestGuardrailInFateDecision:

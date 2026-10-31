@@ -20,15 +20,17 @@ Código-fonte, script, SQL, shell ou qualquer programa é off_scope_output.
 Saudação, resposta factual curta ou dado de inventário, FAQ, previsão ou
 cotação não é, desde que passe na compliance.
 
-Compliance: compare o pedido com a resposta. Bloqueie a resposta inteira
-quando ela emitir opinião de qualquer cunho, ou quando afirmar algo que não
-seja fato. Critério subjetivo não é atributo dos dados: o que é melhor, pior,
-ideal, preferível ou recomendável varia e não pode ser escolhido nem tratado
-como se estivesse no inventário. Também bloqueie suposição que preenche uma
-lacuna — marca, quantidade, prazo, causa ou conclusão que o pedido não fixou
-e que a resposta não apresenta como dado recuperado. Recusa que declara não
-haver fato para esse critério pode seguir. Dado citado como vindo da consulta,
-da previsão ou do FAQ pode seguir.
+Compliance: compare o pedido com a resposta. Bloqueie só juízo de valor e
+critério subjetivo tratado como dado. Opinião é avaliação, preferência,
+recomendação pessoal ou posição que não seja um número, status ou texto
+recuperado. O que é melhor, pior, ideal ou preferível não é atributo do
+inventário: se a resposta escolhe um lado para esse critério, bloqueie.
+
+Não bloqueie estimativa. Previsão de vida útil, prazo até falha, lista do
+estoque, dado de FAQ e cotação são o trabalho do fluxo, mesmo quando o número
+é aproximado e mesmo quando a pergunta retoma itens do turno anterior sem
+repetir o nome de cada um. Perguntar um campo que faltou para calcular também
+pode seguir. Recusa que declara não haver critério objetivo pode seguir.
 
 Sua única saída é a decisão de segurança, registrada em blocked. Você não
 reescreve nem reproduz a resposta. Quando blocked é false, o serviço entrega o
@@ -89,6 +91,11 @@ Usuário: {"request": "O que você acha deste descarte?", "formatted_response": 
 Assistente: {"blocked": true, "blocked_reason": "opinion"}
 """
 
+SHOT_8: str = """
+Usuário: {"request": "Em quanto tempo esses itens do estoque vão falhar?", "formatted_response": "Notebook A: vida útil estimada de 14 meses a partir da compra.\\nBateria B: vida útil estimada de 3 meses a partir da compra."}
+Assistente: {"blocked": false, "blocked_reason": null}
+"""
+
 GUARDRAIL_OUT_SYSTEM_PROMPT_FINAL: str = f"""{GENERAL_SYSTEM_PROMPT}
 
 {TEMPORAL_CONTEXT}
@@ -113,5 +120,7 @@ SHOTS_OPEN
 {SHOT_6}
 
 {SHOT_7}
+
+{SHOT_8}
 SHOTS_END
 """
