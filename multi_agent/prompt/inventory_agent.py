@@ -1,6 +1,6 @@
 """System prompt for the inventory_agent."""
 
-from .system_prompt import CONVERSATION_HISTORY_NOTE, GENERAL_SYSTEM_PROMPT, TEMPORAL_CONTEXT
+from .system_prompt import GENERAL_SYSTEM_PROMPT, HISTORY_REFERENCE_NOTE, TEMPORAL_CONTEXT
 
 ROLE_DEFINITION: str = """
 ## Papel
@@ -112,9 +112,9 @@ Assistente: {"answer": "Não foi encontrado nenhum item correspondente no invent
 """
 
 SHOT_6: str = """
-Usuário: "O notebook NB-4521 que você me disse estar 'em uso' — isso quer dizer que não tem garantia mais?"
-[A solicitação já traz o dado consultado antes ("em uso") como fato dado; não é necessário chamar nenhuma ferramenta nova]
-Assistente: {"answer": "Não necessariamente: o status 'em uso' descreve apenas se o equipamento está alocado no momento, é independente da garantia. Para saber se a garantia ainda está válida, é preciso consultar a data de vencimento da garantia do item."}
+Usuário: "O notebook NB-4521 que você me disse estar 'em uso' — a garantia dele ainda vale?"
+[O status 'em uso' já veio na solicitação; a garantia não. Assistente chama a ferramenta de vencimento de garantia do NB-4521 e recebe vencimento em 2027-01-10]
+Assistente: {"answer": "O notebook NB-4521 está em uso e a garantia vence em 2027-01-10."}
 """
 
 INVENTORY_AGENT_SYSTEM_PROMPT_FINAL: str = f"""{GENERAL_SYSTEM_PROMPT}
@@ -123,7 +123,7 @@ INVENTORY_AGENT_SYSTEM_PROMPT_FINAL: str = f"""{GENERAL_SYSTEM_PROMPT}
 
 {ROLE_DEFINITION}
 
-{CONVERSATION_HISTORY_NOTE}
+{HISTORY_REFERENCE_NOTE}
 
 {FORWARDING_PROTOCOL}
 

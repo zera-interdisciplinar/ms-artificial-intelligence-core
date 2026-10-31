@@ -11,7 +11,7 @@ Tests usecases:
 - /multi-agent/process-message: Test the report agent's ability to generate reports based on input
 - /reports: Test that a disposal report is stored and its URL can be read back
 - /multi-agent/process-message: Test the inventory agent's ability to answer a factual inventory query
-- /multi-agent/process-message: Tests the ablity of a off-topic user message to be handled (blocked by guardrail_in)
+- /multi-agent/process-message: An off-topic message is answered by the orchestrator with blocked false, and no specialist runs
 - /multi-agent/process-message: A unit_id that is not the user's is refused with 403, never answered from another unit's data
 - /multi-agent/conversations: lists a user's threads, newest first, paged, with a 40-character preview
 - /multi-agent/conversations/{thread_id}: returns every message exchanged in that thread
@@ -209,7 +209,11 @@ def test_report_agent(client: TestClient, auth_headers: dict) -> None:
     """
     Test the report agent's ability to generate reports based on input.
     """
-    user_message = "Gere um relatório com o histórico de previsões de falha dos meus equipamentos."
+    # Facts stay in the message. The report agent must not need a stored lot or disposal.
+    user_message = (
+        "Gere a cotação de coleta com 12 notebooks descartáveis e 5 monitores aproveitáveis. "
+        "Não há descarte cadastrado."
+    )
 
     body: ProcessMessageRequest = ProcessMessageRequest(
         thread_id=_new_UUID(),
@@ -310,9 +314,13 @@ def test_off_topic_agent(client: TestClient, auth_headers: dict) -> None:
     assert http_response.status_code == 200
     response: AgentResponse = AgentResponse(**http_response.json())
 
-    # assert that an off-topic message is blocked and does not reach any specialist agent
-    assert response.blocked
-    assert response.blocked_reason is not None
+    # off-topic is not a guardrail block: the orchestrator answers and the suggestion
+    # still goes through guardrail_out. No specialist runs.
+    assert not response.blocked
+    assert response.blocked_reason is None
+    assert response.content
+    assert "orchestrator" in response.agent_trace
+    assert "guardrail_out" in response.agent_trace
 
     assert not called_faq_flow(response)
     assert not called_predict_flow(response)

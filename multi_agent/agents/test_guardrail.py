@@ -10,6 +10,8 @@ from langgraph.graph.message import add_messages
 
 from multi_agent.entity import AgentName
 from multi_agent.agents.guardrail import Guardrail
+from multi_agent.prompt.guardrail_in import GUARDRAIL_IN_SYSTEM_PROMPT_FINAL
+from multi_agent.prompt.guardrail_out import GUARDRAIL_OUT_SYSTEM_PROMPT_FINAL
 
 
 @pytest.fixture
@@ -55,6 +57,17 @@ class TestRemovePiiFromText:
         assert new_text == text
         assert pii_map == {}
 
+    def test_does_not_mask_disposal_ids_or_asset_numbers(self, guardrail):
+        text = (
+            "descarte b7e2c1a0-4f3b-4c2a-8d1e-9a0b1c2d3e4f "
+            "patrimônio 12345678901 lote 12345678 código 12345-678"
+        )
+
+        new_text, pii_map = guardrail._remove_pii_from_text(text)
+
+        assert new_text == text
+        assert pii_map == {}
+
 
 class TestRetreivePiiFromText:
     def test_restores_the_original_values(self, guardrail):
@@ -67,6 +80,20 @@ class TestRetreivePiiFromText:
 
     def test_returns_text_unchanged_when_map_is_empty(self, guardrail):
         assert guardrail._retreive_pii_from_text("sem pii aqui", {}) == "sem pii aqui"
+
+
+class TestGuardrailPromptPolicy:
+    def test_in_blocks_the_whole_message_when_a_zera_request_hides_another_deliverable(self):
+        prompt = GUARDRAIL_IN_SYSTEM_PROMPT_FINAL
+        assert "task_hijack" in prompt
+        assert "mensagem inteira" in prompt
+        assert "Não existe metade permitida" in prompt
+
+    def test_out_blocks_source_code_shipped_as_an_answer(self):
+        prompt = GUARDRAIL_OUT_SYSTEM_PROMPT_FINAL
+        assert "off_scope_output" in prompt
+        assert "opinion" in prompt
+        assert "unsupported_assumption" in prompt
 
 
 class TestGuardrailInFateDecision:
@@ -150,7 +177,21 @@ class TestGuardrailOutFunc:
         ))
 
         assert result["blocked"] is False
-        assert result["final_response"] == "contato joao@example.com"
+        assert result["final_response"] == "contato <EMAIL_0>"
+
+    def test_sends_the_request_with_the_response(self, guardrail):
+        guardrail.guardrail_out_agent.ainvoke = AsyncMock(return_value={
+            "messages": [MagicMock(content=json.dumps({"blocked": False, "blocked_reason": None}))]
+        })
+
+        asyncio.run(guardrail.guardrail_out_func({
+            "current_request": "Quantos itens tenho segundo um critério subjetivo?",
+            "formatted_response": "Não há critério objetivo para contar.",
+        }))
+
+        sent = json.loads(guardrail.guardrail_out_agent.ainvoke.call_args[0][0]["messages"][0].content)
+        assert sent["request"] == "Quantos itens tenho segundo um critério subjetivo?"
+        assert sent["formatted_response"] == "Não há critério objetivo para contar."
 
 
 class TestPiiMapIsRequestScoped:
@@ -176,5 +217,7 @@ class TestPiiMapIsRequestScoped:
             {"formatted_response": "contato <EMAIL_0>", "pii_map": result_b["pii_map"]}
         ))
 
-        assert out_a["final_response"] == "contato joao@example.com"
-        assert out_b["final_response"] == "contato maria@example.com"
+        assert out_a["final_response"] == "contato <EMAIL_0>"
+        assert out_b["final_response"] == "contato <EMAIL_0>"
+        assert guardrail._retreive_pii_from_text(out_a["final_response"], result_a["pii_map"]) == "contato joao@example.com"
+        assert guardrail._retreive_pii_from_text(out_b["final_response"], result_b["pii_map"]) == "contato maria@example.com"

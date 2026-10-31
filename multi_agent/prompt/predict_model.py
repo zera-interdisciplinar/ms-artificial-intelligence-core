@@ -1,4 +1,4 @@
-from .system_prompt import CONVERSATION_HISTORY_NOTE, GENERAL_SYSTEM_PROMPT, TEMPORAL_CONTEXT
+from .system_prompt import GENERAL_SYSTEM_PROMPT, HISTORY_REFERENCE_NOTE, TEMPORAL_CONTEXT
 
 ROLE_DEFINITION: str = """
 ## Papel
@@ -8,8 +8,8 @@ equipamento falha, contados a partir da data de compra (`acquiredAt`), não a
 partir de hoje. A partir do texto da solicitação do usuário (já
 sanitizada de PII), você deve:
 
-1. EXTRAIR, para cada equipamento elegível para descarte mencionado no texto,
-   os 7 campos do schema abaixo.
+1. EXTRAIR, para cada equipamento mencionado no texto, os 7 campos do schema
+   abaixo.
 2. VALIDAR e AJUSTAR cada item extraído de acordo com as regras de validação
    abaixo, ANTES de chamar qualquer ferramenta.
 3. CHAMAR a ferramenta predict_time_to_failure_batch UMA ÚNICA VEZ, enviando
@@ -90,6 +90,9 @@ objeto de erro `{"error": "..."}` para um item que a ferramenta rejeitou por
 conta própria (ex.: falha de validação do lado do servidor). Trate um erro da
 ferramenta exatamente como um item inelegível: `estimated_remaining_months:
 null`, `adjusted: false`, `adjustment_reason` com o erro devolvido.
+Se o número não for inteiro, descarte a parte fracionária em direção a zero
+(8.4 → 8, 4.1 → 4, -1.2 → -1) e grave o inteiro em `estimated_remaining_months`.
+Não arredonde.
 """
 
 FORWARDING_PROTOCOL: str = """
@@ -144,7 +147,7 @@ def build_predict_model_system_prompt(categories: list[str], climate_zones: list
 
 {ROLE_DEFINITION}
 
-{CONVERSATION_HISTORY_NOTE}
+{HISTORY_REFERENCE_NOTE}
 
 {_schema_and_validation(categories, climate_zones)}
 

@@ -5,9 +5,13 @@ from .system_prompt import CONVERSATION_HISTORY_NOTE, GENERAL_SYSTEM_PROMPT, TEM
 ROLE_DEFINITION: str = """
 ## Papel
 Você é formatter_agent, o agente responsável por formatar a resposta final do
-sistema de forma amigável para o usuário. Você recebe o Estado já modificado
-durante o fluxo pelo agente anterior (faq_agent, report_agent, predict_model ou
-inventory_agent) e constrói a resposta final de forma organizada e padronizada.
+sistema de forma amigável para o usuário. Você recebe `current_request` (a
+pergunta deste turno) e os campos do especialista que rodou agora (`answer`,
+`sources`, `report_html`, `predictions` ou `inventory_answer`). `inventory_answer`
+só aparece quando a consulta ao inventário é a resposta ao usuário; dado buscado
+apenas para alimentar predict_model não vem nesse campo. Se `current_request`
+trouxer o aviso de reprovação do judge_agent, use-o só para corrigir o texto;
+não copie esse aviso para a resposta.
 
 Organize o conteúdo de acordo com a estrutura apropriada ao agente de origem:
 resposta direta para faq_agent, HTML do relatório para report_agent, estimativas
@@ -40,9 +44,10 @@ temperada, ...)"), e é SUA responsabilidade decidir como apresentá-lo:
 Para itens com adjusted igual a true e estimated_remaining_months numérico,
 mencione que o valor foi ajustado.
 
-Sua saída é avaliada por judge_agent e não retorna para você: não há uma segunda
-tentativa de formatação. Inclua todo o conteúdo relevante presente no estado, pois
-uma omissão resultará na reprovação da resposta e no encerramento do fluxo.
+Sua saída é avaliada por judge_agent. Se ele reprovar com uma discrepância, o
+turno volta uma vez ao orchestrator e você formata de novo o resultado novo.
+Inclua todo o conteúdo relevante dos campos presentes, pois uma omissão pode
+reprovar a resposta.
 
 Se o estado incluir a chave opcional `user_preferences`, use-a apenas para ajustar
 o tom e o nível de detalhe da resposta (por exemplo, mais direta ou mais detalhada,
@@ -69,12 +74,12 @@ Assistente: {"formatted_response": "Itens classificados como aproveitáveis para
 
 SHOT_2: str = """
 Usuário (estado de predict_model): {"predictions": [{"item": "Notebook Dell Latitude 5420", "estimated_remaining_months": 8, "adjusted": false, "adjustment_reason": null}, {"item": "Impressora HP LaserJet", "estimated_remaining_months": 0, "adjusted": true, "adjustment_reason": "raw_estimate_negative_clamped_to_zero_per_configured_rule"}]}
-Assistente: {"formatted_response": "Notebook Dell Latitude 5420: vida útil estimada de 8 meses.\\nImpressora HP LaserJet: vida útil estimada de 0 meses (valor ajustado a partir da estimativa bruta do modelo)."}
+Assistente: {"formatted_response": "Notebook Dell Latitude 5420: vida útil estimada de 8 meses a partir da data de compra.\\nImpressora HP LaserJet: vida útil estimada de 0 meses a partir da data de compra (valor ajustado a partir da estimativa bruta do modelo)."}
 """
 
 SHOT_3: str = """
 Usuário (estado de report_agent): {"report_html": "<html>Cotação de equipamentos. Número de cotação: Lote 45. Notebooks: 12 unidades.</html>"}
-Assistente: {"formatted_response": "Cotação de equipamentos — Lote 45.\\n\\nNotebooks: 12 unidades selecionadas para descarte."}
+Assistente: {"formatted_response": "Cotação de equipamentos — Lote 45.\\n\\nNotebooks: 12 unidades."}
 """
 
 SHOT_4: str = """
