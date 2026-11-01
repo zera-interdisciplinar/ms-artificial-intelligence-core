@@ -212,11 +212,11 @@ CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) roda em PR para `qa`
 
 | Documento | Conteúdo |
 |---|---|
-| [`docs/this-project-overview.md`](docs/this-project-overview.md) | Agentes |
+| [`docs/this-project-overview.md`](docs/this-project-overview.md) | Agentes. Wiki: [8.2](https://zerainterdisciplinar.atlassian.net/wiki/spaces/Backend/pages/64913409) |
 | [`docs/decisoes.md`](docs/decisoes.md) | Decisões de arquitetura, checkpoint e integração do preditor |
-| [`docs/zera-overview.md`](docs/zera-overview.md) | O Zera além deste repositório |
-| [`docs/contrato-api-ms-artificial-intelligence-core.md`](docs/contrato-api-ms-artificial-intelligence-core.md) | Contrato HTTP |
-| [`docs/spec-fachada-mcp.md`](docs/spec-fachada-mcp.md) | Fachada MCP e OAuth |
+| [`docs/zera-overview.md`](docs/zera-overview.md) | O Zera além deste repositório. Wiki: [Back-end v1](https://zerainterdisciplinar.atlassian.net/wiki/spaces/Backend/pages/55803906) |
+| [`docs/contrato-api-ms-artificial-intelligence-core.md`](docs/contrato-api-ms-artificial-intelligence-core.md) | Contrato HTTP. Wiki: [8.3](https://zerainterdisciplinar.atlassian.net/wiki/spaces/Backend/pages/64946177) |
+| [`docs/spec-fachada-mcp.md`](docs/spec-fachada-mcp.md) | Fachada MCP e OAuth. Wiki: [8.6](https://zerainterdisciplinar.atlassian.net/wiki/spaces/Backend/pages/64684055) |
 
 ## Deploy
 
