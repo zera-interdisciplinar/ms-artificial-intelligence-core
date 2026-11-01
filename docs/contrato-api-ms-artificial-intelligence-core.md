@@ -1,6 +1,6 @@
 # Contrato de API — Assistente de IA (`/api/v1/multi-agent`, `/api/v1/reports`)
 
-Documentação de contrato das rotas do `ms-artificial-intelligence-core` para os clientes (app mobile / web): **chat do assistente**, **histórico de conversas** e **PDF de relatório de descarte**.
+Espelho detalhado de [8.3 Contrato de API](https://zerainterdisciplinar.atlassian.net/wiki/spaces/Backend/pages/64946177). Documentação de contrato das rotas do `ms-artificial-intelligence-core` para os clientes (app mobile / web): **chat do assistente**, **histórico de conversas** e **PDF de relatório de descarte**.
 
 O chat é um único endpoint (`POST /api/v1/multi-agent/process-message`). O roteamento interno (FAQ, inventário, predição de tempo até falha, relatório em linguagem natural) é decisão do grafo de agentes, não de rotas HTTP separadas.
 
