@@ -12,24 +12,36 @@ Você pode chamar as ferramentas do ms-inventory. Nenhuma é obrigatória.
 
 - Se o pedido trouxer um disposal_id, chame `get_disposal_report` com esse id
   antes de preencher o JSON. Copie quote_number, issued_at, proposal_deadline,
-  requester, owner e items como a ferramenta devolveu. Monte categories
+  requester e owner como a ferramenta devolveu. Preserve os dados de items,
+  mas traduza status para português e descarte origin (é um ID técnico de unidade). Monte categories
   agrupando os items por equipment_type: name é o tipo, quantity é a contagem,
   unit é "unidades".
 - Se não houver disposal_id, ou a ferramenta falhar ou não achar o descarte,
   preencha só com o que o pedido já trouxe.
 
 Não invente número de cotação, datas, quantidades, marcas, modelos, patrimônio
-ou série. Campo desconhecido deve ir como string vazia.
+ou série. Campo desconhecido deve ir como string vazia, exceto description,
+que deve usar "Sem observação" quando não houver informação para descrevê-lo.
 
 ## Campos
 - quote_number, issued_at, proposal_deadline, requester, owner: strings.
 - categories: lista de {name, quantity, unit}. unit é "unidades" quando o pedido não disser outra coisa.
-- items: lista de {title, equipment_type, brand, model, quantity, asset_number, serial_number, origin, status, description}.
+- items: lista de {title, equipment_type, brand, model, quantity, asset_number, serial_number, status, description}.
+  status deve estar em português, inclusive quando vier de ferramenta.
+  Não inclua a unidade de origem nem seu ID nos campos, resumo ou tópicos.
+  description: preencha com as informações disponíveis sobre aquele item no
+  pedido e nas ferramentas, reunindo descrição cadastrada, observações, defeitos,
+  danos, acessórios e detalhes relevantes à coleta. Quando necessário, consulte
+  a ferramenta de detalhe do item usando o identificador retornado, se disponível.
+  Preserve as observações existentes e traduza para português. Use apenas fatos
+  associados àquele item; não atribua observações de outro equipamento nem
+  invente características, defeitos ou causas a partir do status. Se só houver
+  dados de identificação e status, sem observações adicionais, use "Sem observação".
   title no formato "Item N - Nome". Um item por equipamento ou grupo informado.
 - summary: texto corrido em português, um a três parágrafos separados por quebra de linha.
   Resume o que já está nos campos: quantidade por tipo, situação física, marcas ou modelos
   citados e descrições que mudam a coleta. Se o pedido ou uma ferramenta trouxer destino,
-  local, peso ou observação do descarte, inclua. Não invente esses dados.
+  local de coleta (sem o ID da unidade), peso ou observação do descarte, inclua. Não invente esses dados.
 - summary_points: até cinco frases curtas para quem vai coletar. Vazio se não houver fato além do parágrafo.
 """
 
@@ -48,7 +60,7 @@ SHOTS_OPEN_NOTICE: str = (
 
 SHOT_1: str = """
 Usuário: "Gere o relatório do Lote 45, com 12 notebooks descartáveis e 5 monitores aproveitáveis."
-Assistente: {"quote_number": "Lote 45", "issued_at": "", "proposal_deadline": "", "requester": "", "owner": "", "categories": [{"name": "Notebooks", "quantity": "12", "unit": "unidades"}, {"name": "Monitores", "quantity": "5", "unit": "unidades"}], "items": [{"title": "Item 1 - Notebooks", "equipment_type": "Notebook", "brand": "", "model": "", "quantity": "12", "asset_number": "", "serial_number": "", "origin": "", "status": "descartável", "description": ""}, {"title": "Item 2 - Monitores", "equipment_type": "Monitor", "brand": "", "model": "", "quantity": "5", "asset_number": "", "serial_number": "", "origin": "", "status": "aproveitável", "description": ""}], "summary": "O lote 45 reúne 17 equipamentos: 12 notebooks descartáveis e 5 monitores aproveitáveis.", "summary_points": ["12 notebooks descartáveis", "5 monitores aproveitáveis"]}
+Assistente: {"quote_number": "Lote 45", "issued_at": "", "proposal_deadline": "", "requester": "", "owner": "", "categories": [{"name": "Notebooks", "quantity": "12", "unit": "unidades"}, {"name": "Monitores", "quantity": "5", "unit": "unidades"}], "items": [{"title": "Item 1 - Notebooks", "equipment_type": "Notebook", "brand": "", "model": "", "quantity": "12", "asset_number": "", "serial_number": "", "status": "descartável", "description": "Sem observação"}, {"title": "Item 2 - Monitores", "equipment_type": "Monitor", "brand": "", "model": "", "quantity": "5", "asset_number": "", "serial_number": "", "status": "aproveitável", "description": "Sem observação"}], "summary": "O lote 45 reúne 17 equipamentos: 12 notebooks descartáveis e 5 monitores aproveitáveis.", "summary_points": ["12 notebooks descartáveis", "5 monitores aproveitáveis"]}
 """
 
 SHOT_2: str = """
@@ -59,7 +71,7 @@ Assistente: {"quote_number": "Lote 12", "issued_at": "", "proposal_deadline": ""
 SHOT_3: str = """
 Usuário: "Gere o relatório do descarte 11111111-1111-1111-1111-111111111111."
 [Assistente chama get_disposal_report com esse disposal_id e recebe owner "Maria", issued_at "2026-03-15" e um item Notebook DAMAGED]
-Assistente: {"quote_number": "", "issued_at": "2026-03-15", "proposal_deadline": "", "requester": "", "owner": "Maria", "categories": [{"name": "Notebook", "quantity": "1", "unit": "unidades"}], "items": [{"title": "Item 1 - Notebook da recepcao", "equipment_type": "Notebook", "brand": "Acme", "model": "Laptop X1", "quantity": "1", "asset_number": "265964", "serial_number": "SN-99", "origin": "aa11bb22-0000-0000-0000-000000000009", "status": "DAMAGED", "description": "tela riscada"}], "summary": "Descarte registrado em 2026-03-15 por Maria.\nUm notebook Acme Laptop X1, patrimônio 265964, está danificado com a tela riscada.", "summary_points": ["1 notebook danificado", "Tela riscada no patrimônio 265964"]}
+Assistente: {"quote_number": "", "issued_at": "2026-03-15", "proposal_deadline": "", "requester": "", "owner": "Maria", "categories": [{"name": "Notebook", "quantity": "1", "unit": "unidades"}], "items": [{"title": "Item 1 - Notebook da recepcao", "equipment_type": "Notebook", "brand": "Acme", "model": "Laptop X1", "quantity": "1", "asset_number": "265964", "serial_number": "SN-99", "status": "danificado", "description": "tela riscada"}], "summary": "Descarte registrado em 2026-03-15 por Maria.\nUm notebook Acme Laptop X1, patrimônio 265964, está danificado com a tela riscada.", "summary_points": ["1 notebook danificado", "Tela riscada no patrimônio 265964"]}
 """
 
 REPORT_AGENT_SYSTEM_PROMPT_FINAL: str = f"""{GENERAL_SYSTEM_PROMPT}
