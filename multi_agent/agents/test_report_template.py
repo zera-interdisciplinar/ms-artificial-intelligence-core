@@ -1,3 +1,5 @@
+import pytest
+
 from multi_agent.agents.report_template import render_quote_report
 
 
@@ -25,7 +27,7 @@ def test_keeps_the_quote_layout_and_escapes_values():
 
     assert "Cotação de equipamentos" in html
     assert "Informações da cotação" in html
-    assert "Overview de categorias selecionadas para descarte" in html
+    assert "Visão geral de categorias selecionadas para descarte" in html
     assert "Informações dos conteúdos" in html
     assert "Notebooks: 67 unidades" in html
     assert "Tipo de equipamento: Notebook" in html
@@ -83,3 +85,43 @@ def test_renders_the_summary_as_paragraphs_and_points():
     assert "<li>12 notebooks</li>" in html
     assert "<li>Tela riscada</li>" in html
     assert "nope" not in html
+
+
+@pytest.mark.parametrize(("raw", "translated"), [
+    ("NEW", "novo"), ("USED", "usado"),
+    ("SEMI_DAMAGED", "semidanificado"), ("DAMAGED", "danificado"),
+    ("DRAFT", "rascunho"), ("PENDING_APPROVAL", "aguardando aprovação"),
+    ("REJECTED", "reprovado"), ("IN_STOCK", "em estoque"),
+    ("IN_USE", "em uso"), ("IN_MAINTENANCE", "em manutenção"),
+    ("AWAITING_EVALUATION", "aguardando avaliação"),
+    ("DISPOSED", "descartado"), ("REMOVED", "removido"),
+    (" damaged ", "danificado"), ("aproveitável", "aproveitável"),
+    (None, ""), ({"status": "DAMAGED"}, ""),
+    ("<script>", "&lt;script&gt;"),
+])
+def test_translates_item_state_in_report(raw, translated):
+    html = render_quote_report({"items": [{"status": raw}]})
+    assert f"Situação: {translated}</p>" in html
+
+
+def test_omits_origin_even_when_agent_copies_unit_id():
+    unit_id = "aa11bb22-0000-0000-0000-000000000009"
+    html = render_quote_report({"items": [{"origin": unit_id, "status": "DAMAGED"}]})
+    assert unit_id not in html
+    assert "Unidade/Local de origem" not in html
+
+
+@pytest.mark.parametrize("item", [{}, {"description": None}, {"description": ""},
+                                  {"description": "  \n  "}, {"description": []}])
+def test_uses_no_observation_when_item_has_no_description(item):
+    html = render_quote_report({"items": [item]})
+    assert "Descrição: Sem observação</p>" in html
+
+
+def test_preserves_and_escapes_item_observations():
+    html = render_quote_report({"items": [
+        {"description": "Tela riscada. Sem carregador. <avaliação>"},
+        {"description": ""},
+    ]})
+    assert "Descrição: Tela riscada. Sem carregador. &lt;avaliação&gt;</p>" in html
+    assert html.count("Descrição: Sem observação</p>") == 1
