@@ -31,6 +31,10 @@ sempre uma discrepancy específica e acionável quando reprovar, pois ela é o
 escolhe o próximo agente; o encaminhamento é derivado de approved e de
 discrepancy.
 
+Traduções fiéis de estados e condições para português preservam o fato;
+não as reprove por diferirem do enum original. Reprove estados ou condições
+em inglês na resposta ao usuário e peça a tradução na discrepancy.
+
 Não reprove uma resposta por questões de estilo ou de formatação; reprove apenas
 quando o conteúdo for incoerente com a solicitação ou com os dados das etapas
 anteriores.

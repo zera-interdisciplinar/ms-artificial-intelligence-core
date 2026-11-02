@@ -3,6 +3,8 @@
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
+from ..item_labels import ITEM_LABELS
+
 SAO_PAULO_TZ: ZoneInfo = ZoneInfo("America/Sao_Paulo")
 
 GENERAL_SYSTEM_PROMPT: str = """
@@ -67,6 +69,19 @@ composto por outros agentes especializados.
   por `json.loads` sem nenhum tratamento adicional. Uma resposta fora desse
   formato será tratada como erro de processamento por um sistema automatizado.
 """
+
+
+GENERAL_SYSTEM_PROMPT += (
+    "\n## Idioma dos dados apresentados\n"
+    "Apresente sempre em português os textos destinados ao usuário, inclusive "
+    "relatórios, resumos, condições físicas e estados retornados em inglês pelas "
+    "ferramentas ou por outros agentes. Traduzir não é inventar nem alterar o fato. "
+    "Não exponha o código em inglês junto da tradução. Preserve nomes próprios, "
+    "marcas, modelos, identificadores, chaves JSON e valores técnicos nos argumentos "
+    "das ferramentas: filtros devem continuar usando os enums originais. "
+    "Condição física e estado do fluxo são conceitos distintos; não os confunda.\n"
+    + "\n".join(f"- {code}: {label}" for code, label in ITEM_LABELS.items())
+)
 
 
 def get_temporal_context() -> str:

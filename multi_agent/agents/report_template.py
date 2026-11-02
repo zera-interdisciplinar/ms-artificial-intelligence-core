@@ -3,6 +3,8 @@
 from html import escape
 from typing import Any
 
+from ..item_labels import item_label
+
 _FIELD_LIMIT = 400
 _SUMMARY_LIMIT = 1800
 _REPORT_LOGO_URL = (
@@ -142,7 +144,7 @@ def render_quote_report(data: dict) -> str:
 </section>
 
 <section class="card">
-  <div class="pill">Overview de categorias selecionadas para descarte</div>
+  <div class="pill">Visão geral de categorias selecionadas para descarte</div>
   <p>Abaixo estão as categorias de equipamentos selecionadas para coleta e descarte.</p>
   <p>Os itens serão avaliados conforme as informações fornecidas.</p>
   <ul>{category_html}</ul>
@@ -187,8 +189,7 @@ def _item_card(index: int, row: dict) -> str:
         <p class="label">Número de série: {_text(row.get("serial_number"))}</p>
       </td>
       <td>
-        <p class="label">Unidade/Local de origem: {_text(row.get("origin"))}</p>
-        <p class="label">Situação: {_text(row.get("status"))}</p>
+        <p class="label">Situação: {_text(item_label(row.get("status")))}</p>
         <p class="label">Descrição: {_text(row.get("description"))}</p>
       </td>
     </tr>
