@@ -206,7 +206,7 @@ CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) roda em PR para `qa`
 | Comando | O que faz |
 |---|---|
 | `make index-faq` | Recria a collection Qdrant a partir do PDF (`python script/index_faq.py [--path PATH]`) |
-| `python script/load_conversations.py` | Carga de cinco minutos em `POST /api/v1/multi-agent/process-message` contra QA: amostra usuários no Postgres do admin-core, um fio por usuário, fluxos faq / inventory / predict / report. Lê `script/.env.qa` quando existe. Variáveis e defaults estão no docstring do arquivo |
+| `python script/load_conversations.py` | Carga de cinco minutos em `POST /api/v1/multi-agent/process-message` contra QA: amostra usuários no Postgres do admin-core, um fio por usuário, fluxos faq / inventory / predict / report. Lê `script/.env.qa` quando existe. Variáveis e defaults estão no docstring do arquivo. [Relatório da carga (Google Docs)](https://docs.google.com/document/d/1D3jre3aLn5e-S_eND7K6uvzQm5ZVgWgcwEgnsTCWFdE/edit?usp=sharing) |
 
 ## Documentação
 
@@ -217,6 +217,7 @@ CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) roda em PR para `qa`
 | [`docs/zera-overview.md`](docs/zera-overview.md) | O Zera além deste repositório. Wiki: [Back-end v1](https://zerainterdisciplinar.atlassian.net/wiki/spaces/Backend/pages/55803906) |
 | [`docs/contrato-api-ms-artificial-intelligence-core.md`](docs/contrato-api-ms-artificial-intelligence-core.md) | Contrato HTTP. Wiki: [8.3](https://zerainterdisciplinar.atlassian.net/wiki/spaces/Backend/pages/64946177) |
 | [`docs/spec-fachada-mcp.md`](docs/spec-fachada-mcp.md) | Fachada MCP e OAuth. Wiki: [8.6](https://zerainterdisciplinar.atlassian.net/wiki/spaces/Backend/pages/64684055) |
+| [Relatório de carga QA (Google Docs)](https://docs.google.com/document/d/1D3jre3aLn5e-S_eND7K6uvzQm5ZVgWgcwEgnsTCWFdE/edit?usp=sharing) | Resultados do teste de carga em QA (15/10/2026), métricas LangSmith e projeção de custo |
 
 ## Deploy
 

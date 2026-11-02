@@ -21,6 +21,9 @@ Env (same names as the admin-core service):
   TOKENS_JSON  optional {user_id: bearer_jwt} overrides the signed token.
   USERS=100  DURATION_SECONDS=300  MAX_IN_FLIGHT=5
   THINK_MIN=12  THINK_MAX=35
+
+Relatório da carga de QA (15/10/2026):
+  https://docs.google.com/document/d/1D3jre3aLn5e-S_eND7K6uvzQm5ZVgWgcwEgnsTCWFdE/edit?usp=sharing
 """
 
 import asyncio
