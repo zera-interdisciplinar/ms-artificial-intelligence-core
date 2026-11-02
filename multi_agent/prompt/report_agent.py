@@ -20,7 +20,8 @@ Você pode chamar as ferramentas do ms-inventory. Nenhuma é obrigatória.
   preencha só com o que o pedido já trouxe.
 
 Não invente número de cotação, datas, quantidades, marcas, modelos, patrimônio
-ou série. Campo desconhecido deve ir como string vazia.
+ou série. Campo desconhecido deve ir como string vazia, exceto description,
+que deve usar "Sem observação" quando não houver informação para descrevê-lo.
 
 ## Campos
 - quote_number, issued_at, proposal_deadline, requester, owner: strings.
@@ -28,6 +29,14 @@ ou série. Campo desconhecido deve ir como string vazia.
 - items: lista de {title, equipment_type, brand, model, quantity, asset_number, serial_number, status, description}.
   status deve estar em português, inclusive quando vier de ferramenta.
   Não inclua a unidade de origem nem seu ID nos campos, resumo ou tópicos.
+  description: preencha com as informações disponíveis sobre aquele item no
+  pedido e nas ferramentas, reunindo descrição cadastrada, observações, defeitos,
+  danos, acessórios e detalhes relevantes à coleta. Quando necessário, consulte
+  a ferramenta de detalhe do item usando o identificador retornado, se disponível.
+  Preserve as observações existentes e traduza para português. Use apenas fatos
+  associados àquele item; não atribua observações de outro equipamento nem
+  invente características, defeitos ou causas a partir do status. Se só houver
+  dados de identificação e status, sem observações adicionais, use "Sem observação".
   title no formato "Item N - Nome". Um item por equipamento ou grupo informado.
 - summary: texto corrido em português, um a três parágrafos separados por quebra de linha.
   Resume o que já está nos campos: quantidade por tipo, situação física, marcas ou modelos
@@ -51,7 +60,7 @@ SHOTS_OPEN_NOTICE: str = (
 
 SHOT_1: str = """
 Usuário: "Gere o relatório do Lote 45, com 12 notebooks descartáveis e 5 monitores aproveitáveis."
-Assistente: {"quote_number": "Lote 45", "issued_at": "", "proposal_deadline": "", "requester": "", "owner": "", "categories": [{"name": "Notebooks", "quantity": "12", "unit": "unidades"}, {"name": "Monitores", "quantity": "5", "unit": "unidades"}], "items": [{"title": "Item 1 - Notebooks", "equipment_type": "Notebook", "brand": "", "model": "", "quantity": "12", "asset_number": "", "serial_number": "", "status": "descartável", "description": ""}, {"title": "Item 2 - Monitores", "equipment_type": "Monitor", "brand": "", "model": "", "quantity": "5", "asset_number": "", "serial_number": "", "status": "aproveitável", "description": ""}], "summary": "O lote 45 reúne 17 equipamentos: 12 notebooks descartáveis e 5 monitores aproveitáveis.", "summary_points": ["12 notebooks descartáveis", "5 monitores aproveitáveis"]}
+Assistente: {"quote_number": "Lote 45", "issued_at": "", "proposal_deadline": "", "requester": "", "owner": "", "categories": [{"name": "Notebooks", "quantity": "12", "unit": "unidades"}, {"name": "Monitores", "quantity": "5", "unit": "unidades"}], "items": [{"title": "Item 1 - Notebooks", "equipment_type": "Notebook", "brand": "", "model": "", "quantity": "12", "asset_number": "", "serial_number": "", "status": "descartável", "description": "Sem observação"}, {"title": "Item 2 - Monitores", "equipment_type": "Monitor", "brand": "", "model": "", "quantity": "5", "asset_number": "", "serial_number": "", "status": "aproveitável", "description": "Sem observação"}], "summary": "O lote 45 reúne 17 equipamentos: 12 notebooks descartáveis e 5 monitores aproveitáveis.", "summary_points": ["12 notebooks descartáveis", "5 monitores aproveitáveis"]}
 """
 
 SHOT_2: str = """

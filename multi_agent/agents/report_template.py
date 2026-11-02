@@ -176,6 +176,7 @@ def render_quote_report(data: dict) -> str:
 
 def _item_card(index: int, row: dict) -> str:
     title = _text(row.get("title") or f"Item {index}")
+    description = _text(row.get("description")) or "Sem observação"
     return f"""
   <table class="split">
     <tr>
@@ -190,7 +191,7 @@ def _item_card(index: int, row: dict) -> str:
       </td>
       <td>
         <p class="label">Situação: {_text(item_label(row.get("status")))}</p>
-        <p class="label">Descrição: {_text(row.get("description"))}</p>
+        <p class="label">Descrição: {description}</p>
       </td>
     </tr>
   </table>

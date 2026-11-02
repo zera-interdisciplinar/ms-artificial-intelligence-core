@@ -109,3 +109,19 @@ def test_omits_origin_even_when_agent_copies_unit_id():
     html = render_quote_report({"items": [{"origin": unit_id, "status": "DAMAGED"}]})
     assert unit_id not in html
     assert "Unidade/Local de origem" not in html
+
+
+@pytest.mark.parametrize("item", [{}, {"description": None}, {"description": ""},
+                                  {"description": "  \n  "}, {"description": []}])
+def test_uses_no_observation_when_item_has_no_description(item):
+    html = render_quote_report({"items": [item]})
+    assert "Descrição: Sem observação</p>" in html
+
+
+def test_preserves_and_escapes_item_observations():
+    html = render_quote_report({"items": [
+        {"description": "Tela riscada. Sem carregador. <avaliação>"},
+        {"description": ""},
+    ]})
+    assert "Descrição: Tela riscada. Sem carregador. &lt;avaliação&gt;</p>" in html
+    assert html.count("Descrição: Sem observação</p>") == 1
